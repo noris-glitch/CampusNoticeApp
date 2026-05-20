@@ -17,6 +17,7 @@ import {
   ProfileSection,
   StudentFeedSection,
 } from '@/components/native-sections-common';
+import ShortsSection from '@/components/native-shorts-section';
 import {
   AdminDashboardData,
   BootstrapResponse,
@@ -43,6 +44,7 @@ type ScreenKey =
   | 'notifications'
   | 'profile'
   | 'shareLocation'
+  | 'shorts'
   | 'studentSync';
 
 type MenuSection = {
@@ -208,6 +210,14 @@ export default function NativeAppShell({
               session={session}
             />
           ) : null}
+          {activeScreen === 'shorts' ? (
+            <ShortsSection
+              isActive
+              onDirty={handleDirty}
+              refreshToken={refreshToken}
+              session={session}
+            />
+          ) : null}
           {activeScreen === 'shareLocation' ? (
             <LocationEventsSection
               isActive
@@ -366,6 +376,7 @@ function getMenuSections(
             key: 'notifications',
             label: 'Notifications',
           },
+          { icon: '🎬', key: 'shorts', label: 'Shorts' },
           { icon: '🔖', key: 'bookmarks', label: 'Bookmarks' },
           { icon: '🗂️', key: 'archive', label: 'Notice archive' },
         ],
@@ -396,6 +407,7 @@ function getMenuSections(
         items: [
           { icon: '👑', key: 'dashboard', label: 'Dashboard' },
           { icon: '🚨', key: 'emergency', label: 'Emergency alert' },
+          { icon: '🎬', key: 'shorts', label: 'Shorts' },
         ],
       },
       {
@@ -424,7 +436,10 @@ function getMenuSections(
   const sections: MenuSection[] = [
     {
       heading: 'Main',
-      items: [{ icon: '📊', key: 'dashboard', label: 'Dashboard' }],
+      items: [
+        { icon: '📊', key: 'dashboard', label: 'Dashboard' },
+        { icon: '🎬', key: 'shorts', label: 'Shorts' },
+      ],
     },
     {
       heading: 'Notice Management',

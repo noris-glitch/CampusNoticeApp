@@ -30,6 +30,7 @@ export const API_PATHS = {
   emergencyAlerts: '/ajax/api/emergency_alerts.php',
   manageUsers: '/ajax/api/manage_users.php',
   studentSync: '/ajax/api/student_sync.php',
+  shorts: '/ajax/api/shorts.php',
 } as const;
 
 export type UserRole = 'student' | 'admin' | 'super_admin';
@@ -124,6 +125,28 @@ export interface NoticeItem {
   template_id?: number | null;
   title: string;
   target_faculty_name?: string | null;
+  view_count?: number;
+  year_target?: number | null;
+}
+
+export interface ShortItem {
+  audience_roles_csv?: string | null;
+  author_name?: string | null;
+  author_role?: UserRole | null;
+  can_manage?: number;
+  caption: string;
+  created_at: string;
+  department_id?: number | null;
+  department_name?: string | null;
+  duration_seconds: number;
+  faculty_name?: string | null;
+  faculty_target?: number | null;
+  has_viewed?: number;
+  id: number;
+  posted_by?: number;
+  status?: string | null;
+  title?: string | null;
+  video_filename: string;
   view_count?: number;
   year_target?: number | null;
 }
@@ -234,6 +257,8 @@ export interface AdminNoticesResponse {
   notices: NoticeItem[];
   priorities: Record<string, string>;
   recurrence_options: Record<string, string>;
+  sms_gateway_message?: string | null;
+  sms_gateway_ready?: boolean;
   success: boolean;
   templates: TemplateOption[];
   years: Array<{ label: string; value: number }>;
@@ -314,6 +339,8 @@ export interface ManageUsersResponse {
   faculties: FacultyOption[];
   stats: {
     active_users: number;
+    students_missing_departments?: number;
+    students_missing_phone_numbers?: number;
     total_admins: number;
     total_students: number;
     total_super_admins: number;
@@ -325,6 +352,21 @@ export interface ManageUsersResponse {
 }
 
 export interface StudentSyncResponse {
+  backfill_summary?: {
+    missing_both: number;
+    missing_departments: number;
+    missing_phone_numbers: number;
+    ready_profiles: number;
+    samples: Array<{
+      email: string;
+      faculty_name?: string | null;
+      id: number;
+      name: string;
+      phone_number?: string | null;
+      student_id?: string | null;
+    }>;
+    total_students: number;
+  };
   issues: string[];
   message?: string;
   note?: string;
@@ -332,6 +374,16 @@ export interface StudentSyncResponse {
   skipped: number;
   success: boolean;
   updated: number;
+}
+
+export interface ShortsResponse {
+  audience_roles: Record<string, string>;
+  departments: DepartmentOption[];
+  faculties: FacultyOption[];
+  shorts: ShortItem[];
+  student_scope_locked?: boolean;
+  success: boolean;
+  years: YearOption[];
 }
 
 export interface SimpleSuccessResponse {
@@ -347,6 +399,7 @@ export interface SimpleSuccessResponse {
   error?: string;
   message?: string;
   notice_id?: number;
+  short_id?: number;
   reset_token?: string;
   expires_at?: string;
   result?: {
@@ -388,6 +441,17 @@ export interface CreateAdminNoticePayload {
   template_id?: number | null;
   template_name?: string | null;
   title: string;
+  year_target?: number | null;
+}
+
+export interface CreateShortPayload {
+  audience_roles?: UserRole[];
+  caption: string;
+  department_target?: number | null;
+  duration_seconds: number;
+  faculty_target?: number | null;
+  title?: string | null;
+  video: UploadAsset;
   year_target?: number | null;
 }
 
@@ -496,6 +560,18 @@ export function noticeAttachmentUrl(attachment?: string | null): string | null {
   }
 
   return `${API_BASE_URL}/assets/uploads/${attachment}`;
+}
+
+export function shortVideoUrl(videoFilename?: string | null): string | null {
+  if (!videoFilename) {
+    return null;
+  }
+
+  if (/^https?:\/\//i.test(videoFilename)) {
+    return videoFilename;
+  }
+
+  return `${API_BASE_URL}/assets/uploads/shorts/${videoFilename}`;
 }
 
 export function profilePictureUrl(profilePicture?: string | null): string | null {
@@ -887,6 +963,42 @@ export async function uploadStudentSyncFile(
       csv_file: asset,
     }
   );
+}
+
+export async function fetchShorts(user: StoredUser): Promise<ShortsResponse> {
+  return getRequest<ShortsResponse>(API_PATHS.shorts, authParams(user));
+}
+
+export async function createShort(
+  user: StoredUser,
+  payload: CreateShortPayload
+): Promise<SimpleSuccessResponse> {
+  const { video, ...fields } = payload;
+
+  return postMultipartRequest<SimpleSuccessResponse>(
+    API_PATHS.shorts,
+    {
+      ...authParams(user),
+      ...fields,
+      action: 'create',
+    },
+    {
+      video,
+    }
+  );
+}
+
+export async function runShortAction(
+  user: StoredUser,
+  payload: {
+    action: 'delete' | 'view';
+    short_id: number;
+  }
+): Promise<SimpleSuccessResponse> {
+  return postRequest<SimpleSuccessResponse>(API_PATHS.shorts, {
+    ...authParams(user),
+    ...payload,
+  });
 }
 
 export function getApiErrorMessage(error: unknown, fallback: string): string {

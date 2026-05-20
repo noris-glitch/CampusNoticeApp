@@ -613,6 +613,11 @@ export function CreateNoticeSection({
         <ToggleRow label="In-app delivery" value={inAppChannel} onValueChange={setInAppChannel} />
         <ToggleRow label="Email delivery" value={emailChannel} onValueChange={setEmailChannel} />
         <ToggleRow label="SMS delivery" value={smsChannel} onValueChange={setSmsChannel} />
+        {smsChannel && metadata?.sms_gateway_ready === false ? (
+          <Text style={styles.helperText}>
+            {metadata.sms_gateway_message || 'SMS delivery is not configured on the server yet.'}
+          </Text>
+        ) : null}
         {isLocationOnly ? (
           <View style={styles.helperButton}>
             <Text style={styles.helperButtonText}>This screen publishes map-enabled location events.</Text>
@@ -948,6 +953,12 @@ const styles = StyleSheet.create({
     color: palette.navy,
     fontSize: 13,
     fontWeight: '800',
+  },
+  helperText: {
+    color: palette.muted,
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 8,
   },
   input: {
     backgroundColor: palette.bg,

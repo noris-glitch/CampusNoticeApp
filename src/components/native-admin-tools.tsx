@@ -945,7 +945,7 @@ export function StudentSyncSection({ isActive, onDirty, refreshToken, session }:
     <ScrollView contentContainerStyle={styles.screen}>
       <SectionIntro
         title="Student sync"
-        subtitle="Upload registrar-style CSV files to update existing student accounts in bulk."
+        subtitle="Upload registrar-style CSV files to update existing student accounts in bulk and backfill missing departments or phone numbers."
       />
 
       <Panel>
@@ -978,6 +978,37 @@ export function StudentSyncSection({ isActive, onDirty, refreshToken, session }:
             <MetricCard label="Updated" value={visibleResult.updated} />
             <MetricCard label="Skipped" value={visibleResult.skipped} />
           </View>
+
+          {visibleResult.backfill_summary ? (
+            <>
+              <Panel>
+                <Text style={styles.sectionTitle}>Backfill status</Text>
+                <Text style={styles.bodyText}>
+                  Use the CSV sync to close the gaps below for already-registered students.
+                </Text>
+              </Panel>
+
+              <View style={styles.metricGrid}>
+                <MetricCard label="Students" value={visibleResult.backfill_summary.total_students} />
+                <MetricCard label="Missing dept" value={visibleResult.backfill_summary.missing_departments} />
+                <MetricCard label="Missing phone" value={visibleResult.backfill_summary.missing_phone_numbers} />
+                <MetricCard label="Missing both" value={visibleResult.backfill_summary.missing_both} />
+              </View>
+
+              <Panel>
+                <Text style={styles.sectionTitle}>Profiles still needing backfill</Text>
+                {visibleResult.backfill_summary.samples.length === 0 ? (
+                  <Text style={styles.helperText}>Everyone in scope already has both a department and phone number.</Text>
+                ) : (
+                  visibleResult.backfill_summary.samples.map((sample) => (
+                    <Text key={sample.id} style={styles.issueText}>
+                      • {sample.name} ({sample.student_id || sample.email}) {sample.faculty_name ? `· ${sample.faculty_name}` : ''}
+                    </Text>
+                  ))
+                )}
+              </Panel>
+            </>
+          ) : null}
 
           <Panel>
             <Text style={styles.sectionTitle}>Sync notes</Text>
