@@ -5,12 +5,13 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { Href, useLocalSearchParams, useRouter } from 'expo-router';
 
 import {
   getApiErrorMessage,
@@ -22,19 +23,29 @@ import {
 
 const colors = {
   accent: '#0f7b6c',
+  accentSoft: '#dff8f2',
   ink: '#10253c',
   muted: '#60738a',
   page: '#f4f7fb',
   panel: '#ffffff',
+  stroke: '#d9e3ef',
   warm: '#ff8a5b',
 };
 
 export default function LoginScreen() {
+  const params = useLocalSearchParams<{ email?: string }>();
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
+  const [showPassword, setShowPassword] = useState(false);
+
+  useEffect(() => {
+    if (typeof params.email === 'string' && params.email.trim() !== '') {
+      setEmail(params.email.trim());
+    }
+  }, [params.email]);
 
   useEffect(() => {
     let isMounted = true;
@@ -94,68 +105,86 @@ export default function LoginScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={styles.screen}
     >
-      <View style={styles.hero}>
-        <Text style={styles.kicker}>JOOUST Campus Notice</Text>
-        <Text style={styles.title}>Native access for students, admins, and super admins.</Text>
-        <Text style={styles.subtitle}>
-          Log in once and work directly in the app without relying on the website wrapper.
-        </Text>
-      </View>
+      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+        <View style={styles.hero}>
+          <Text style={styles.kicker}>JOOUST Campus Notice</Text>
+          <Text style={styles.title}>Sign in to your campus workspace.</Text>
+          <Text style={styles.subtitle}>
+            Students can create accounts here, while admins and super admins can sign in with existing credentials.
+          </Text>
+        </View>
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Login</Text>
-        <Text style={styles.label}>Email address</Text>
-        <TextInput
-          autoCapitalize="none"
-          keyboardType="email-address"
-          placeholder="you@jooust.ac.ke"
-          placeholderTextColor={colors.muted}
-          style={styles.input}
-          value={email}
-          onChangeText={setEmail}
-        />
-        <Text style={styles.label}>Password</Text>
-        <TextInput
-          placeholder="Your password"
-          placeholderTextColor={colors.muted}
-          secureTextEntry
-          style={styles.input}
-          value={password}
-          onChangeText={setPassword}
-        />
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Welcome back</Text>
+          <Text style={styles.cardSubtitle}>Use your email and password to continue.</Text>
 
-        <Pressable disabled={loading} onPress={() => void handleLogin()} style={styles.button}>
-          {loading ? (
-            <ActivityIndicator color="#ffffff" />
-          ) : (
-            <Text style={styles.buttonText}>Open dashboard</Text>
-          )}
-        </Pressable>
+          <Text style={styles.label}>Email address</Text>
+          <TextInput
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="email-address"
+            placeholder="you@jooust.ac.ke"
+            placeholderTextColor={colors.muted}
+            style={styles.input}
+            value={email}
+            onChangeText={setEmail}
+          />
 
-        <Text style={styles.helper}>
-          First login may take a few seconds if the Render backend is waking up.
-        </Text>
-      </View>
+          <Text style={styles.label}>Password</Text>
+          <View style={styles.passwordRow}>
+            <TextInput
+              autoCapitalize="none"
+              autoCorrect={false}
+              placeholder="Your password"
+              placeholderTextColor={colors.muted}
+              secureTextEntry={!showPassword}
+              style={styles.passwordInput}
+              value={password}
+              onChangeText={setPassword}
+            />
+            <Pressable onPress={() => setShowPassword((current) => !current)} style={styles.passwordToggle}>
+              <Text style={styles.passwordToggleText}>{showPassword ? 'Hide' : 'Show'}</Text>
+            </Pressable>
+          </View>
+
+          <Pressable disabled={loading} onPress={() => void handleLogin()} style={styles.primaryButton}>
+            {loading ? (
+              <ActivityIndicator color="#ffffff" />
+            ) : (
+              <Text style={styles.primaryButtonText}>Sign in</Text>
+            )}
+          </Pressable>
+
+          <Pressable onPress={() => router.push('/forgot-password' as Href)} style={styles.inlineLink}>
+            <Text style={styles.inlineLinkText}>Forgot password?</Text>
+          </Pressable>
+
+          <View style={styles.dividerRow}>
+            <View style={styles.divider} />
+            <Text style={styles.dividerText}>New here?</Text>
+            <View style={styles.divider} />
+          </View>
+
+          <Pressable onPress={() => router.push('/register' as Href)} style={styles.secondaryButton}>
+            <Text style={styles.secondaryButtonText}>Create student account</Text>
+          </Pressable>
+
+          <View style={styles.supportCard}>
+            <Text style={styles.supportTitle}>Need help getting in?</Text>
+            <Text style={styles.supportText}>
+              First login may take a few seconds if the Render backend is waking up. If you are an admin without an account, contact the system administrator.
+            </Text>
+          </View>
+        </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  button: {
-    alignItems: 'center',
-    backgroundColor: colors.accent,
-    borderRadius: 18,
-    marginTop: 18,
-    paddingVertical: 16,
-  },
-  buttonText: {
-    color: '#ffffff',
-    fontSize: 15,
-    fontWeight: '800',
-  },
   card: {
     backgroundColor: colors.panel,
-    borderRadius: 24,
+    borderRadius: 28,
     elevation: 4,
     padding: 22,
     shadowColor: '#10253c',
@@ -163,26 +192,51 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     width: '100%',
   },
+  cardSubtitle: {
+    color: colors.muted,
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 8,
+  },
   cardTitle: {
     color: colors.ink,
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: '900',
     marginBottom: 6,
   },
-  helper: {
+  divider: {
+    backgroundColor: colors.stroke,
+    flex: 1,
+    height: 1,
+  },
+  dividerRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 20,
+  },
+  dividerText: {
     color: colors.muted,
     fontSize: 12,
-    lineHeight: 18,
-    marginTop: 12,
-    textAlign: 'center',
+    fontWeight: '700',
+    textTransform: 'uppercase',
   },
   hero: {
     marginBottom: 24,
     width: '100%',
   },
+  inlineLink: {
+    alignSelf: 'flex-end',
+    marginTop: 14,
+  },
+  inlineLinkText: {
+    color: colors.accent,
+    fontSize: 13,
+    fontWeight: '800',
+  },
   input: {
     backgroundColor: colors.page,
-    borderColor: '#d9e3ef',
+    borderColor: colors.stroke,
     borderRadius: 16,
     borderWidth: 1,
     color: colors.ink,
@@ -201,7 +255,7 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 13,
     fontWeight: '700',
-    marginTop: 10,
+    marginTop: 12,
   },
   loadingScreen: {
     alignItems: 'center',
@@ -214,17 +268,86 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 12,
   },
+  passwordInput: {
+    color: colors.ink,
+    flex: 1,
+    fontSize: 15,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+  },
+  passwordRow: {
+    alignItems: 'center',
+    backgroundColor: colors.page,
+    borderColor: colors.stroke,
+    borderRadius: 16,
+    borderWidth: 1,
+    flexDirection: 'row',
+    marginTop: 8,
+  },
+  passwordToggle: {
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+  },
+  passwordToggleText: {
+    color: colors.accent,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  primaryButton: {
+    alignItems: 'center',
+    backgroundColor: colors.accent,
+    borderRadius: 18,
+    marginTop: 20,
+    paddingVertical: 16,
+  },
+  primaryButtonText: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: '800',
+  },
   screen: {
     backgroundColor: colors.page,
     flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
     justifyContent: 'center',
     padding: 20,
+  },
+  secondaryButton: {
+    alignItems: 'center',
+    backgroundColor: colors.accentSoft,
+    borderRadius: 18,
+    marginTop: 20,
+    paddingVertical: 16,
+  },
+  secondaryButtonText: {
+    color: colors.accent,
+    fontSize: 15,
+    fontWeight: '800',
   },
   subtitle: {
     color: colors.muted,
     fontSize: 15,
     lineHeight: 22,
     marginTop: 8,
+  },
+  supportCard: {
+    backgroundColor: colors.page,
+    borderRadius: 18,
+    marginTop: 18,
+    padding: 16,
+  },
+  supportText: {
+    color: colors.muted,
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 6,
+  },
+  supportTitle: {
+    color: colors.ink,
+    fontSize: 14,
+    fontWeight: '800',
   },
   title: {
     color: colors.ink,

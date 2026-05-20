@@ -16,6 +16,8 @@ const apiClient = axios.create({
 export const API_PATHS = {
   warmup: '/login.php',
   login: '/ajax/api/login.php',
+  register: '/ajax/api/register.php',
+  passwordReset: '/ajax/api/password_reset.php',
   bootstrap: '/ajax/api/bootstrap.php',
   notices: '/ajax/api/notices.php',
   noticeActions: '/ajax/api/notice_actions.php',
@@ -56,6 +58,11 @@ export interface FacultyOption {
   dean_name?: string | null;
   id: number;
   name: string;
+}
+
+export interface YearOption {
+  label: string;
+  value: number;
 }
 
 export interface NoticeItem {
@@ -205,6 +212,12 @@ export interface AdminNoticesResponse {
   years: Array<{ label: string; value: number }>;
 }
 
+export interface RegistrationOptionsResponse {
+  faculties: FacultyOption[];
+  success: boolean;
+  years: YearOption[];
+}
+
 export interface SharedLocation {
   latitude: number;
   location_address?: string | null;
@@ -236,6 +249,8 @@ export interface SimpleSuccessResponse {
   error?: string;
   message?: string;
   notice_id?: number;
+  reset_token?: string;
+  expires_at?: string;
   result?: {
     decision: string;
     status: string;
@@ -243,6 +258,7 @@ export interface SimpleSuccessResponse {
   status?: string;
   success: boolean;
   user?: StoredUser;
+  errors?: string[];
 }
 
 export interface CreateAdminNoticePayload {
@@ -434,6 +450,41 @@ export async function loginWithPassword(email: string, password: string): Promis
   }
 
   return response;
+}
+
+export async function fetchRegistrationOptions(): Promise<RegistrationOptionsResponse> {
+  return getRequest<RegistrationOptionsResponse>(API_PATHS.register);
+}
+
+export async function registerStudent(payload: {
+  confirm_password: string;
+  email: string;
+  faculty_id?: number | null;
+  membership?: string | null;
+  name: string;
+  password: string;
+  student_id: string;
+  year: number;
+}): Promise<SimpleSuccessResponse> {
+  return postRequest<SimpleSuccessResponse>(API_PATHS.register, payload);
+}
+
+export async function requestPasswordReset(email: string): Promise<SimpleSuccessResponse> {
+  return postRequest<SimpleSuccessResponse>(API_PATHS.passwordReset, {
+    action: 'request_reset',
+    email,
+  });
+}
+
+export async function submitPasswordReset(payload: {
+  confirm_password: string;
+  password: string;
+  token: string;
+}): Promise<SimpleSuccessResponse> {
+  return postRequest<SimpleSuccessResponse>(API_PATHS.passwordReset, {
+    action: 'reset_password',
+    ...payload,
+  });
 }
 
 export async function fetchBootstrap(user: StoredUser): Promise<BootstrapResponse> {
