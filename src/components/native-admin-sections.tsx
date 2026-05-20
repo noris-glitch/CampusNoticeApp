@@ -269,7 +269,9 @@ export function CreateNoticeSection({
   const [category, setCategory] = useState(isLocationOnly ? 'Event' : 'Academic');
   const [priority, setPriority] = useState('normal');
   const [facultyTarget, setFacultyTarget] = useState<number | null>(session.role === 'admin' ? session.faculty_id || null : null);
+  const [departmentTarget, setDepartmentTarget] = useState<number | null>(null);
   const [yearTarget, setYearTarget] = useState<number | null>(null);
+  const [selectedAudienceRoles, setSelectedAudienceRoles] = useState<Array<'student' | 'admin' | 'super_admin'>>([]);
   const [scheduleDate, setScheduleDate] = useState('');
   const [expireDate, setExpireDate] = useState('');
   const [ackDate, setAckDate] = useState('');
@@ -277,6 +279,7 @@ export function CreateNoticeSection({
   const [requiresAck, setRequiresAck] = useState(false);
   const [inAppChannel, setInAppChannel] = useState(true);
   const [emailChannel, setEmailChannel] = useState(false);
+  const [smsChannel, setSmsChannel] = useState(false);
   const [saveAsTemplate, setSaveAsTemplate] = useState(false);
   const [templateName, setTemplateName] = useState('');
   const [recurringTemplate, setRecurringTemplate] = useState(false);
@@ -329,6 +332,22 @@ export function CreateNoticeSection({
       setCategory('Event');
     }
   }, [isLocationOnly]);
+
+  const visibleDepartments = (metadata?.departments || []).filter(
+    (department) =>
+      facultyTarget === null || department.faculty_id === facultyTarget || department.faculty_id === null
+  );
+
+  useEffect(() => {
+    if (departmentTarget === null) {
+      return;
+    }
+
+    const stillVisible = visibleDepartments.some((department) => department.id === departmentTarget);
+    if (!stillVisible) {
+      setDepartmentTarget(null);
+    }
+  }, [departmentTarget, visibleDepartments]);
 
   const pickAttachment = async () => {
     try {
@@ -402,10 +421,13 @@ export function CreateNoticeSection({
         delivery_channels: [
           ...(inAppChannel ? ['in_app'] : []),
           ...(emailChannel ? ['email'] : []),
+          ...(smsChannel ? ['sms'] : []),
         ],
+        department_target: departmentTarget,
         event_date: locationEnabled ? eventDate : null,
         event_end_date: locationEnabled ? eventEndDate : null,
         expire_date: expireDate,
+        audience_roles: selectedAudienceRoles,
         faculty_target: facultyTarget,
         is_location_event: locationEnabled,
         is_pinned: pinned,
@@ -435,6 +457,9 @@ export function CreateNoticeSection({
       setPinned(false);
       setRequiresAck(false);
       setEmailChannel(false);
+      setSmsChannel(false);
+      setDepartmentTarget(null);
+      setSelectedAudienceRoles([]);
       setSaveAsTemplate(false);
       setTemplateName('');
       setRecurringTemplate(false);
@@ -496,6 +521,23 @@ export function CreateNoticeSection({
             />
           ))}
         </View>
+        <Text style={styles.label}>Target department</Text>
+        <View style={styles.wrapRow}>
+          <ChoicePill active={departmentTarget === null} label="All departments" onPress={() => setDepartmentTarget(null)} />
+          {visibleDepartments.map((department) => (
+            <ChoicePill
+              key={department.id}
+              active={departmentTarget === department.id}
+              label={department.name}
+              onPress={() => {
+                setDepartmentTarget(department.id);
+                if (department.faculty_id && facultyTarget === null) {
+                  setFacultyTarget(department.faculty_id);
+                }
+              }}
+            />
+          ))}
+        </View>
         <Text style={styles.label}>Target year</Text>
         <View style={styles.wrapRow}>
           <ChoicePill active={yearTarget === null} label="All years" onPress={() => setYearTarget(null)} />
@@ -507,6 +549,30 @@ export function CreateNoticeSection({
               onPress={() => setYearTarget(item)}
             />
           ))}
+        </View>
+        <Text style={styles.label}>Audience roles</Text>
+        <View style={styles.wrapRow}>
+          <ChoicePill
+            active={selectedAudienceRoles.length === 0}
+            label="All roles"
+            onPress={() => setSelectedAudienceRoles([])}
+          />
+          {Object.entries(metadata?.audience_roles || {}).map(([value, label]) => {
+            const roleValue = value as 'student' | 'admin' | 'super_admin';
+            const active = selectedAudienceRoles.includes(roleValue);
+            return (
+              <ChoicePill
+                key={value}
+                active={active}
+                label={label}
+                onPress={() =>
+                  setSelectedAudienceRoles((current) =>
+                    active ? current.filter((item) => item !== roleValue) : [...current, roleValue]
+                  )
+                }
+              />
+            );
+          })}
         </View>
         <Text style={styles.label}>Schedule publish at</Text>
         <TextInput
@@ -546,6 +612,7 @@ export function CreateNoticeSection({
         ) : null}
         <ToggleRow label="In-app delivery" value={inAppChannel} onValueChange={setInAppChannel} />
         <ToggleRow label="Email delivery" value={emailChannel} onValueChange={setEmailChannel} />
+        <ToggleRow label="SMS delivery" value={smsChannel} onValueChange={setSmsChannel} />
         {isLocationOnly ? (
           <View style={styles.helperButton}>
             <Text style={styles.helperButtonText}>This screen publishes map-enabled location events.</Text>

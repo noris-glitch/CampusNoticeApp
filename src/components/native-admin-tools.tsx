@@ -56,12 +56,15 @@ interface BaseProps {
 
 interface UserDraft {
   admin_type: string;
+  department_id: number | null;
+  department_name: string;
   email: string;
   faculty_id: number | null;
   is_active: boolean;
   membership: string;
   name: string;
   password: string;
+  phone_number: string;
   role: UserRole;
   student_id: string;
   user_id: number | null;
@@ -70,12 +73,15 @@ interface UserDraft {
 
 const emptyUserDraft: UserDraft = {
   admin_type: '',
+  department_id: null,
+  department_name: '',
   email: '',
   faculty_id: null,
   is_active: true,
   membership: '',
   name: '',
   password: '',
+  phone_number: '',
   role: 'student',
   student_id: '',
   user_id: null,
@@ -212,12 +218,15 @@ function formatUserDraft(source?: ManagedUserItem | null): UserDraft {
 
   return {
     admin_type: source.admin_type || '',
+    department_id: source.department_id ?? null,
+    department_name: source.department_name || '',
     email: source.email,
     faculty_id: source.faculty_id ?? null,
     is_active: Boolean(source.is_active),
     membership: source.membership || '',
     name: source.name,
     password: '',
+    phone_number: source.phone_number || '',
     role: source.role,
     student_id: source.student_id || '',
     user_id: source.id,
@@ -486,7 +495,9 @@ export function ManageUsersSection({ isActive, onDirty, refreshToken, session }:
       item.name.toLowerCase().includes(deferredSearch) ||
       item.email.toLowerCase().includes(deferredSearch) ||
       (item.student_id || '').toLowerCase().includes(deferredSearch) ||
-      (item.faculty_name || '').toLowerCase().includes(deferredSearch);
+      (item.faculty_name || '').toLowerCase().includes(deferredSearch) ||
+      (item.department_name || '').toLowerCase().includes(deferredSearch) ||
+      (item.phone_number || '').toLowerCase().includes(deferredSearch);
 
     const matchesRole = roleFilter === 'all' || item.role === roleFilter;
     const matchesStatus =
@@ -500,6 +511,11 @@ export function ManageUsersSection({ isActive, onDirty, refreshToken, session }:
   const setDraftField = <K extends keyof UserDraft>(key: K, value: UserDraft[K]) => {
     setDraft((current) => ({ ...current, [key]: value }));
   };
+
+  const visibleDepartments = (response?.departments || []).filter(
+    (department) =>
+      draft.faculty_id === null || department.faculty_id === draft.faculty_id || department.faculty_id === null
+  );
 
   const resetDraft = () => {
     setDraft({ ...emptyUserDraft });
@@ -523,11 +539,14 @@ export function ManageUsersSection({ isActive, onDirty, refreshToken, session }:
       if (draft.user_id) {
         result = await updateManagedUser(session, {
           admin_type: draft.admin_type || null,
+          department_id: draft.department_id,
+          department_name: draft.department_id === null ? draft.department_name.trim() || null : null,
           email: draft.email.trim(),
           faculty_id: draft.faculty_id,
           is_active: draft.is_active,
           membership: draft.membership.trim() || null,
           name: draft.name.trim(),
+          phone_number: draft.phone_number.trim() || null,
           role: draft.role,
           user_id: draft.user_id,
           year: draft.year,
@@ -535,11 +554,14 @@ export function ManageUsersSection({ isActive, onDirty, refreshToken, session }:
       } else {
         result = await createManagedUser(session, {
           admin_type: draft.admin_type || null,
+          department_id: draft.department_id,
+          department_name: draft.department_id === null ? draft.department_name.trim() || null : null,
           email: draft.email.trim(),
           faculty_id: draft.faculty_id,
           membership: draft.membership.trim() || null,
           name: draft.name.trim(),
           password: draft.password,
+          phone_number: draft.phone_number.trim() || null,
           role: draft.role,
           student_id: draft.student_id.trim(),
           year: draft.year,
@@ -613,6 +635,15 @@ export function ManageUsersSection({ isActive, onDirty, refreshToken, session }:
           value={draft.email}
           onChangeText={(value) => setDraftField('email', value)}
         />
+        <Text style={styles.label}>Phone number</Text>
+        <TextInput
+          keyboardType="phone-pad"
+          placeholder="+2547..."
+          placeholderTextColor={palette.muted}
+          style={styles.input}
+          value={draft.phone_number}
+          onChangeText={(value) => setDraftField('phone_number', value)}
+        />
         <Text style={styles.label}>Student or staff ID</Text>
         <TextInput
           editable={!draft.user_id}
@@ -662,17 +693,55 @@ export function ManageUsersSection({ isActive, onDirty, refreshToken, session }:
           <ChoicePill
             active={draft.faculty_id === null}
             label="Not set"
-            onPress={() => setDraftField('faculty_id', null)}
+            onPress={() => {
+              setDraftField('faculty_id', null);
+              setDraftField('department_id', null);
+            }}
           />
           {(response?.faculties || []).map((faculty) => (
             <ChoicePill
               key={faculty.id}
               active={draft.faculty_id === faculty.id}
               label={faculty.name}
-              onPress={() => setDraftField('faculty_id', faculty.id)}
+              onPress={() => {
+                setDraftField('faculty_id', faculty.id);
+                setDraftField('department_id', null);
+                setDraftField('department_name', '');
+              }}
             />
           ))}
         </View>
+        <Text style={styles.label}>Department</Text>
+        <View style={styles.wrapRow}>
+          <ChoicePill
+            active={draft.department_id === null}
+            label="Not set"
+            onPress={() => setDraftField('department_id', null)}
+          />
+          {visibleDepartments.map((department) => (
+            <ChoicePill
+              key={department.id}
+              active={draft.department_id === department.id}
+              label={department.name}
+              onPress={() => {
+                setDraftField('department_id', department.id);
+                setDraftField('department_name', department.name);
+              }}
+            />
+          ))}
+        </View>
+        <TextInput
+          placeholder="Or type a department name"
+          placeholderTextColor={palette.muted}
+          style={styles.input}
+          value={draft.department_name}
+          onChangeText={(value) => {
+            setDraftField('department_name', value);
+            if (value.trim() !== '') {
+              setDraftField('department_id', null);
+            }
+          }}
+        />
         <Text style={styles.label}>Year</Text>
         <View style={styles.wrapRow}>
           <ChoicePill active={draft.year === null} label="Not set" onPress={() => setDraftField('year', null)} />
@@ -762,6 +831,8 @@ export function ManageUsersSection({ isActive, onDirty, refreshToken, session }:
                 <Text style={styles.metaText}>
                   {item.student_id || 'No ID'} · {item.faculty_name || 'No faculty'} · {item.year ? `Year ${item.year}` : 'Year not set'}
                 </Text>
+                {item.department_name ? <Text style={styles.metaText}>Department: {item.department_name}</Text> : null}
+                {item.phone_number ? <Text style={styles.metaText}>Phone: {item.phone_number}</Text> : null}
                 {item.admin_type ? <Text style={styles.metaText}>Admin type: {item.admin_type}</Text> : null}
                 <Text style={styles.metaText}>Joined: {formatDateLabel(item.created_at)}</Text>
                 <View style={styles.buttonRow}>

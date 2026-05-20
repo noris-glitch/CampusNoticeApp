@@ -42,11 +42,14 @@ export interface UploadAsset {
 
 export interface StoredUser {
   admin_type?: string | null;
+  department_id?: number | null;
+  department_name?: string | null;
   email: string;
   faculty_id?: number | null;
   faculty_name?: string | null;
   membership?: string | null;
   name: string;
+  phone_number?: string | null;
   profile_picture?: string | null;
   profile_picture_url?: string | null;
   role: UserRole;
@@ -59,6 +62,14 @@ export interface StoredUser {
 
 export interface FacultyOption {
   dean_name?: string | null;
+  id: number;
+  name: string;
+}
+
+export interface DepartmentOption {
+  code?: string | null;
+  faculty_id?: number | null;
+  faculty_name?: string | null;
   id: number;
   name: string;
 }
@@ -88,6 +99,9 @@ export interface NoticeItem {
   event_end_date?: string | null;
   expire_at?: string | null;
   faculty_target?: number | null;
+  department_id?: number | null;
+  department_name?: string | null;
+  audience_roles_csv?: string | null;
   has_viewed?: number;
   id: number;
   is_bookmarked?: number;
@@ -104,9 +118,12 @@ export interface NoticeItem {
   recurrence_pattern?: string | null;
   requires_acknowledgement?: number;
   review_notes?: string | null;
+  sms_failed?: number;
+  sms_sent?: number;
   status?: string | null;
   template_id?: number | null;
   title: string;
+  target_faculty_name?: string | null;
   view_count?: number;
   year_target?: number | null;
 }
@@ -150,6 +167,7 @@ export interface AdminDashboardData {
 export interface BootstrapResponse {
   categories: string[];
   dashboard: AdminDashboardData | StudentDashboardData;
+  departments?: DepartmentOption[];
   faculties: FacultyOption[];
   success: boolean;
   unread_notifications: number;
@@ -169,6 +187,7 @@ export interface NoticesResponse {
 
 export interface ProfileResponse {
   categories: string[];
+  departments: DepartmentOption[];
   faculties: FacultyOption[];
   notification_preferences: {
     categories: string[];
@@ -177,6 +196,7 @@ export interface ProfileResponse {
     in_app_enabled: number;
     quiet_hours_end?: string | null;
     quiet_hours_start?: string | null;
+    sms_enabled: number;
   };
   stats: {
     bookmark_count: number;
@@ -188,11 +208,13 @@ export interface ProfileResponse {
 }
 
 export interface TemplateOption {
+  audience_roles_csv?: string | null;
   author_name?: string | null;
   category?: string | null;
   content: string;
   default_priority?: string | null;
   delivery_channels?: string | null;
+  department_id?: number | null;
   faculty_target?: number | null;
   id: number;
   is_pinned?: number;
@@ -205,7 +227,9 @@ export interface TemplateOption {
 }
 
 export interface AdminNoticesResponse {
+  audience_roles: Record<string, string>;
   categories: string[];
+  departments: DepartmentOption[];
   faculties: FacultyOption[];
   notices: NoticeItem[];
   priorities: Record<string, string>;
@@ -216,6 +240,7 @@ export interface AdminNoticesResponse {
 }
 
 export interface RegistrationOptionsResponse {
+  departments: DepartmentOption[];
   faculties: FacultyOption[];
   success: boolean;
   years: YearOption[];
@@ -268,6 +293,8 @@ export interface EmergencyAlertsResponse {
 export interface ManagedUserItem {
   admin_type?: string | null;
   created_at: string;
+  department_id?: number | null;
+  department_name?: string | null;
   email: string;
   faculty_id?: number | null;
   faculty_name?: string | null;
@@ -275,6 +302,7 @@ export interface ManagedUserItem {
   is_active: number;
   membership?: string | null;
   name: string;
+  phone_number?: string | null;
   role: UserRole;
   student_id?: string | null;
   year?: number | null;
@@ -282,6 +310,7 @@ export interface ManagedUserItem {
 
 export interface ManageUsersResponse {
   admin_types: Record<string, string>;
+  departments: DepartmentOption[];
   faculties: FacultyOption[];
   stats: {
     active_users: number;
@@ -311,6 +340,8 @@ export interface SimpleSuccessResponse {
     email_failed: number;
     email_sent: number;
     in_app: number;
+    sms_failed: number;
+    sms_sent: number;
     users: number;
   } | null;
   error?: string;
@@ -331,9 +362,11 @@ export interface SimpleSuccessResponse {
 export interface CreateAdminNoticePayload {
   acknowledgement_due_at?: string | null;
   attachment?: UploadAsset | null;
+  audience_roles?: UserRole[];
   category: string;
   content: string;
   delivery_channels: string[];
+  department_target?: number | null;
   event_date?: string | null;
   event_end_date?: string | null;
   expire_date?: string | null;
@@ -525,11 +558,14 @@ export async function fetchRegistrationOptions(): Promise<RegistrationOptionsRes
 
 export async function registerStudent(payload: {
   confirm_password: string;
+  department_id?: number | null;
+  department_name?: string | null;
   email: string;
   faculty_id?: number | null;
   membership?: string | null;
   name: string;
   password: string;
+  phone_number?: string | null;
   student_id: string;
   year: number;
 }): Promise<SimpleSuccessResponse> {
@@ -648,10 +684,13 @@ export async function uploadProfilePhoto(
 export async function updateProfile(
   user: StoredUser,
   payload: {
+    department_id?: number | null;
+    department_name?: string | null;
     email: string;
     faculty_id?: number | null;
     membership?: string | null;
     name: string;
+    phone_number?: string | null;
     year?: number | null;
   }
 ): Promise<SimpleSuccessResponse> {
@@ -671,6 +710,7 @@ export async function saveNotificationPreferences(
     in_app_enabled: boolean;
     quiet_hours_end?: string | null;
     quiet_hours_start?: string | null;
+    sms_enabled: boolean;
   }
 ): Promise<SimpleSuccessResponse> {
   return postRequest<SimpleSuccessResponse>(API_PATHS.profile, {
@@ -777,11 +817,14 @@ export async function createManagedUser(
   user: StoredUser,
   payload: {
     admin_type?: string | null;
+    department_id?: number | null;
+    department_name?: string | null;
     email: string;
     faculty_id?: number | null;
     membership?: string | null;
     name: string;
     password: string;
+    phone_number?: string | null;
     role: UserRole;
     student_id: string;
     year?: number | null;
@@ -798,11 +841,14 @@ export async function updateManagedUser(
   user: StoredUser,
   payload: {
     admin_type?: string | null;
+    department_id?: number | null;
+    department_name?: string | null;
     email: string;
     faculty_id?: number | null;
     is_active: boolean;
     membership?: string | null;
     name: string;
+    phone_number?: string | null;
     role: UserRole;
     user_id: number;
     year?: number | null;

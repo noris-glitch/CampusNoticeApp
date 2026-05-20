@@ -920,9 +920,12 @@ export function ProfileSection({
   const [saving, setSaving] = useState(false);
   const [name, setName] = useState(session.name);
   const [email, setEmail] = useState(session.email);
+  const [phoneNumber, setPhoneNumber] = useState(session.phone_number || '');
   const [year, setYear] = useState<string>(session.year ? String(session.year) : '');
   const [membership, setMembership] = useState(session.membership || '');
   const [selectedFaculty, setSelectedFaculty] = useState<number | null>(session.faculty_id || null);
+  const [selectedDepartment, setSelectedDepartment] = useState<number | null>(session.department_id || null);
+  const [customDepartment, setCustomDepartment] = useState('');
   const [passwordForm, setPasswordForm] = useState({
     confirm_password: '',
     current_password: '',
@@ -948,9 +951,12 @@ export function ProfileSection({
         setProfile(response);
         setName(response.user.name);
         setEmail(response.user.email);
+        setPhoneNumber(response.user.phone_number || '');
         setYear(response.user.year ? String(response.user.year) : '');
         setMembership(response.user.membership || '');
         setSelectedFaculty(response.user.faculty_id || null);
+        setSelectedDepartment(response.user.department_id || null);
+        setCustomDepartment('');
       } catch (loadError) {
         if (isMounted) {
           setError(getApiErrorMessage(loadError, 'Could not load your profile.'));
@@ -970,6 +976,27 @@ export function ProfileSection({
 
   const preferences = profile?.notification_preferences;
   const avatarUrl = profilePictureUrl(profile?.user.profile_picture || session.profile_picture);
+  const departments = profile?.departments || [];
+  const visibleDepartments = departments.filter(
+    (department) =>
+      selectedFaculty === null || department.faculty_id === selectedFaculty || department.faculty_id === null
+  );
+
+  useEffect(() => {
+    if (selectedDepartment === null) {
+      return;
+    }
+
+    const stillVisible = departments.some(
+      (department) =>
+        department.id === selectedDepartment &&
+        (selectedFaculty === null || department.faculty_id === selectedFaculty || department.faculty_id === null)
+    );
+
+    if (!stillVisible) {
+      setSelectedDepartment(null);
+    }
+  }, [departments, selectedDepartment, selectedFaculty]);
 
   const handleProfilePhotoPick = async () => {
     setSaving(true);
@@ -1020,10 +1047,13 @@ export function ProfileSection({
     setSaving(true);
     try {
       const response = await updateProfile(session, {
+        department_id: selectedDepartment,
+        department_name: selectedDepartment === null ? customDepartment.trim() || null : null,
         email,
         faculty_id: selectedFaculty,
         membership,
         name,
+        phone_number: phoneNumber.trim() || null,
         year: year === '' ? null : Number(year),
       });
 
@@ -1055,6 +1085,7 @@ export function ProfileSection({
         in_app_enabled: Boolean(preferences.in_app_enabled),
         quiet_hours_end: preferences.quiet_hours_end || null,
         quiet_hours_start: preferences.quiet_hours_start || null,
+        sms_enabled: Boolean(preferences.sms_enabled),
       });
       Alert.alert('Preferences', response.message || 'Notification preferences saved.');
       onDirty();
@@ -1132,6 +1163,15 @@ export function ProfileSection({
               value={email}
               onChangeText={setEmail}
             />
+            <Text style={styles.label}>Phone number</Text>
+            <TextInput
+              keyboardType="phone-pad"
+              placeholder="+2547..."
+              placeholderTextColor={palette.muted}
+              style={styles.input}
+              value={phoneNumber}
+              onChangeText={setPhoneNumber}
+            />
             <Text style={styles.label}>Faculty</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipStrip}>
               <Chip active={selectedFaculty === null} label="Not set" onPress={() => setSelectedFaculty(null)} />
@@ -1140,10 +1180,40 @@ export function ProfileSection({
                   key={faculty.id}
                   active={selectedFaculty === faculty.id}
                   label={faculty.name}
-                  onPress={() => setSelectedFaculty(faculty.id)}
+                  onPress={() => {
+                    setSelectedFaculty(faculty.id);
+                    setCustomDepartment('');
+                  }}
                 />
               ))}
             </ScrollView>
+            <Text style={styles.label}>Department</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipStrip}>
+              <Chip active={selectedDepartment === null} label="Not set" onPress={() => setSelectedDepartment(null)} />
+              {visibleDepartments.map((department) => (
+                <Chip
+                  key={department.id}
+                  active={selectedDepartment === department.id}
+                  label={department.name}
+                  onPress={() => {
+                    setSelectedDepartment(department.id);
+                    setCustomDepartment('');
+                  }}
+                />
+              ))}
+            </ScrollView>
+            <TextInput
+              placeholder="Or type a department name"
+              placeholderTextColor={palette.muted}
+              style={styles.input}
+              value={customDepartment}
+              onChangeText={(value) => {
+                setCustomDepartment(value);
+                if (value.trim() !== '') {
+                  setSelectedDepartment(null);
+                }
+              }}
+            />
             <Text style={styles.label}>Year</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipStrip}>
               {['', '1', '2', '3', '4'].map((value) => (
@@ -1203,6 +1273,23 @@ export function ProfileSection({
                             notification_preferences: {
                               ...current.notification_preferences,
                               email_enabled: value ? 1 : 0,
+                            },
+                          }
+                        : current
+                    )
+                  }
+                />
+                <PreferenceRow
+                  label="SMS notifications"
+                  value={Boolean(preferences.sms_enabled)}
+                  onValueChange={(value) =>
+                    setProfile((current) =>
+                      current
+                        ? {
+                            ...current,
+                            notification_preferences: {
+                              ...current.notification_preferences,
+                              sms_enabled: value ? 1 : 0,
                             },
                           }
                         : current

@@ -14,6 +14,7 @@ import {
 import { useRouter } from 'expo-router';
 
 import {
+  DepartmentOption,
   FacultyOption,
   fetchRegistrationOptions,
   getApiErrorMessage,
@@ -61,6 +62,7 @@ function ChoiceChip({
 
 export default function RegisterScreen() {
   const router = useRouter();
+  const [departments, setDepartments] = useState<DepartmentOption[]>([]);
   const [faculties, setFaculties] = useState<FacultyOption[]>([]);
   const [years, setYears] = useState<YearOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -71,8 +73,11 @@ export default function RegisterScreen() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [studentId, setStudentId] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [membership, setMembership] = useState('');
   const [selectedFaculty, setSelectedFaculty] = useState<number | null>(null);
+  const [selectedDepartment, setSelectedDepartment] = useState<number | null>(null);
+  const [customDepartment, setCustomDepartment] = useState('');
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -87,6 +92,7 @@ export default function RegisterScreen() {
         if (!isMounted) {
           return;
         }
+        setDepartments(response.departments);
         setFaculties(response.faculties);
         setYears(response.years);
       } catch (loadError) {
@@ -105,6 +111,27 @@ export default function RegisterScreen() {
       isMounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (selectedDepartment === null) {
+      return;
+    }
+
+    const stillVisible = departments.some(
+      (department) =>
+        department.id === selectedDepartment &&
+        (selectedFaculty === null || department.faculty_id === selectedFaculty || department.faculty_id === null)
+    );
+
+    if (!stillVisible) {
+      setSelectedDepartment(null);
+    }
+  }, [departments, selectedDepartment, selectedFaculty]);
+
+  const visibleDepartments = departments.filter(
+    (department) =>
+      selectedFaculty === null || department.faculty_id === selectedFaculty || department.faculty_id === null
+  );
 
   const passwordChecks = [
     { label: 'At least 8 characters', valid: password.length >= 8 },
@@ -134,11 +161,14 @@ export default function RegisterScreen() {
     try {
       const response = await registerStudent({
         confirm_password: confirmPassword,
+        department_id: selectedDepartment,
+        department_name: selectedDepartment === null ? customDepartment.trim() || null : null,
         email: email.trim(),
         faculty_id: selectedFaculty,
         membership: membership.trim() || null,
         name: name.trim(),
         password,
+        phone_number: phoneNumber.trim() || null,
         student_id: studentId.trim(),
         year: selectedYear,
       });
@@ -207,6 +237,16 @@ export default function RegisterScreen() {
                 onChangeText={setStudentId}
               />
 
+              <Text style={styles.label}>Phone number</Text>
+              <TextInput
+                keyboardType="phone-pad"
+                placeholder="+2547..."
+                placeholderTextColor={colors.muted}
+                style={styles.input}
+                value={phoneNumber}
+                onChangeText={setPhoneNumber}
+              />
+
               <Text style={styles.label}>Faculty</Text>
               <View style={styles.wrapRow}>
                 {faculties.map((faculty) => (
@@ -214,10 +254,45 @@ export default function RegisterScreen() {
                     key={faculty.id}
                     active={selectedFaculty === faculty.id}
                     label={faculty.name}
-                    onPress={() => setSelectedFaculty(faculty.id)}
+                    onPress={() => {
+                      setSelectedFaculty(faculty.id);
+                      setCustomDepartment('');
+                    }}
                   />
                 ))}
               </View>
+
+              <Text style={styles.label}>Department</Text>
+              <View style={styles.wrapRow}>
+                <ChoiceChip
+                  active={selectedDepartment === null}
+                  label="Select later"
+                  onPress={() => setSelectedDepartment(null)}
+                />
+                {visibleDepartments.map((department) => (
+                  <ChoiceChip
+                    key={department.id}
+                    active={selectedDepartment === department.id}
+                    label={department.name}
+                    onPress={() => {
+                      setSelectedDepartment(department.id);
+                      setCustomDepartment('');
+                    }}
+                  />
+                ))}
+              </View>
+              <TextInput
+                placeholder="Or type your department name"
+                placeholderTextColor={colors.muted}
+                style={styles.input}
+                value={customDepartment}
+                onChangeText={(value) => {
+                  setCustomDepartment(value);
+                  if (value.trim() !== '') {
+                    setSelectedDepartment(null);
+                  }
+                }}
+              />
 
               <Text style={styles.label}>Year of study</Text>
               <View style={styles.wrapRow}>
