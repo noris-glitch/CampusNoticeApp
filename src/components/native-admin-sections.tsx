@@ -45,6 +45,10 @@ interface BaseProps {
   session: StoredUser;
 }
 
+interface CreateNoticeSectionProps extends BaseProps {
+  mode?: 'location' | 'notice';
+}
+
 export function AdminDashboardSection({
   dashboard,
 }: {
@@ -250,12 +254,19 @@ export function ManageNoticesSection({ isActive, onDirty, refreshToken, session 
   );
 }
 
-export function CreateNoticeSection({ isActive, onDirty, refreshToken, session }: BaseProps) {
+export function CreateNoticeSection({
+  isActive,
+  mode = 'notice',
+  onDirty,
+  refreshToken,
+  session,
+}: CreateNoticeSectionProps) {
+  const isLocationOnly = mode === 'location';
   const [metadata, setMetadata] = useState<Awaited<ReturnType<typeof fetchAdminNotices>> | null>(null);
   const [saving, setSaving] = useState(false);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
-  const [category, setCategory] = useState('Academic');
+  const [category, setCategory] = useState(isLocationOnly ? 'Event' : 'Academic');
   const [priority, setPriority] = useState('normal');
   const [facultyTarget, setFacultyTarget] = useState<number | null>(session.role === 'admin' ? session.faculty_id || null : null);
   const [yearTarget, setYearTarget] = useState<number | null>(null);
@@ -271,7 +282,7 @@ export function CreateNoticeSection({ isActive, onDirty, refreshToken, session }
   const [recurringTemplate, setRecurringTemplate] = useState(false);
   const [recurrencePattern, setRecurrencePattern] = useState('');
   const [attachment, setAttachment] = useState<UploadAsset | null>(null);
-  const [locationEnabled, setLocationEnabled] = useState(false);
+  const [locationEnabled, setLocationEnabled] = useState(isLocationOnly);
   const [latitude, setLatitude] = useState('');
   const [longitude, setLongitude] = useState('');
   const [locationName, setLocationName] = useState('');
@@ -311,6 +322,13 @@ export function CreateNoticeSection({ isActive, onDirty, refreshToken, session }
       setCategory('Event');
     }
   }, [category, locationEnabled]);
+
+  useEffect(() => {
+    if (isLocationOnly) {
+      setLocationEnabled(true);
+      setCategory('Event');
+    }
+  }, [isLocationOnly]);
 
   const pickAttachment = async () => {
     try {
@@ -422,7 +440,7 @@ export function CreateNoticeSection({ isActive, onDirty, refreshToken, session }
       setRecurringTemplate(false);
       setRecurrencePattern('');
       setAttachment(null);
-      setLocationEnabled(false);
+      setLocationEnabled(isLocationOnly);
       setLatitude('');
       setLongitude('');
       setLocationName('');
@@ -440,7 +458,14 @@ export function CreateNoticeSection({ isActive, onDirty, refreshToken, session }
 
   return (
     <ScrollView contentContainerStyle={styles.sectionContent}>
-      <SectionIntro title="Create notice" subtitle="Publish a native notice without leaving the app." />
+      <SectionIntro
+        title={isLocationOnly ? 'Create location event' : 'Create notice'}
+        subtitle={
+          isLocationOnly
+            ? 'Publish a mapped campus event with coordinates, radius, and event timing.'
+            : 'Publish a native notice without leaving the app.'
+        }
+      />
 
       <Panel>
         <Text style={styles.label}>Title</Text>
@@ -521,7 +546,13 @@ export function CreateNoticeSection({ isActive, onDirty, refreshToken, session }
         ) : null}
         <ToggleRow label="In-app delivery" value={inAppChannel} onValueChange={setInAppChannel} />
         <ToggleRow label="Email delivery" value={emailChannel} onValueChange={setEmailChannel} />
-        <ToggleRow label="Location event" value={locationEnabled} onValueChange={setLocationEnabled} />
+        {isLocationOnly ? (
+          <View style={styles.helperButton}>
+            <Text style={styles.helperButtonText}>This screen publishes map-enabled location events.</Text>
+          </View>
+        ) : (
+          <ToggleRow label="Location event" value={locationEnabled} onValueChange={setLocationEnabled} />
+        )}
         {locationEnabled ? (
           <>
             <Pressable style={styles.helperButton} onPress={() => void useCurrentLocation()}>

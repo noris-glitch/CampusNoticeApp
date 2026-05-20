@@ -2,6 +2,12 @@ import React, { startTransition, useEffect, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import {
+  EmergencyAlertsSection,
+  HelpSupportSection,
+  ManageUsersSection,
+  StudentSyncSection,
+} from '@/components/native-admin-tools';
 import LocationEventsSection from '@/components/native-location-section';
 import { AdminDashboardSection, CreateNoticeSection, ManageNoticesSection } from '@/components/native-admin-sections';
 import {
@@ -25,12 +31,19 @@ type ScreenKey =
   | 'archive'
   | 'bookmarks'
   | 'create'
+  | 'createLocation'
   | 'dashboard'
+  | 'emergency'
+  | 'eventMap'
   | 'feed'
-  | 'location'
+  | 'help'
   | 'manage'
+  | 'manageUsers'
+  | 'nearby'
   | 'notifications'
-  | 'profile';
+  | 'profile'
+  | 'shareLocation'
+  | 'studentSync';
 
 type MenuSection = {
   heading: string;
@@ -109,7 +122,7 @@ export default function NativeAppShell({
     handleDirty();
   };
 
-  const menuSections = getMenuSections(session.role, bootstrap?.unread_notifications || 0);
+  const menuSections = getMenuSections(session.role, session.admin_type || null, bootstrap?.unread_notifications || 0);
   const currentMenuItem =
     menuSections.flatMap((section) => section.items).find((item) => item.key === activeScreen) ||
     menuSections[0]?.items[0];
@@ -195,9 +208,28 @@ export default function NativeAppShell({
               session={session}
             />
           ) : null}
-          {activeScreen === 'location' ? (
+          {activeScreen === 'shareLocation' ? (
             <LocationEventsSection
               isActive
+              mode="share"
+              onDirty={handleDirty}
+              refreshToken={refreshToken}
+              session={session}
+            />
+          ) : null}
+          {activeScreen === 'nearby' ? (
+            <LocationEventsSection
+              isActive
+              mode="nearby"
+              onDirty={handleDirty}
+              refreshToken={refreshToken}
+              session={session}
+            />
+          ) : null}
+          {activeScreen === 'eventMap' ? (
+            <LocationEventsSection
+              isActive
+              mode="map"
               onDirty={handleDirty}
               refreshToken={refreshToken}
               session={session}
@@ -231,6 +263,40 @@ export default function NativeAppShell({
               session={session}
             />
           ) : null}
+          {activeScreen === 'createLocation' ? (
+            <CreateNoticeSection
+              isActive
+              mode="location"
+              onDirty={handleDirty}
+              refreshToken={refreshToken}
+              session={session}
+            />
+          ) : null}
+          {activeScreen === 'emergency' ? (
+            <EmergencyAlertsSection
+              isActive
+              onDirty={handleDirty}
+              refreshToken={refreshToken}
+              session={session}
+            />
+          ) : null}
+          {activeScreen === 'manageUsers' ? (
+            <ManageUsersSection
+              isActive
+              onDirty={handleDirty}
+              refreshToken={refreshToken}
+              session={session}
+            />
+          ) : null}
+          {activeScreen === 'studentSync' ? (
+            <StudentSyncSection
+              isActive
+              onDirty={handleDirty}
+              refreshToken={refreshToken}
+              session={session}
+            />
+          ) : null}
+          {activeScreen === 'help' ? <HelpSupportSection /> : null}
         </View>
       ) : null}
 
@@ -283,13 +349,17 @@ function getDefaultScreen(role: StoredUser['role']): ScreenKey {
   return role === 'student' ? 'feed' : 'dashboard';
 }
 
-function getMenuSections(role: StoredUser['role'], unreadNotifications: number): MenuSection[] {
+function getMenuSections(
+  role: StoredUser['role'],
+  adminType: StoredUser['admin_type'] | null,
+  unreadNotifications: number
+): MenuSection[] {
   if (role === 'student') {
     return [
       {
         heading: 'Main',
         items: [
-          { icon: '🏠', key: 'feed', label: 'Notice feed' },
+          { icon: '🏠', key: 'feed', label: 'Home feed' },
           {
             badge: unreadNotifications > 0 ? unreadNotifications : undefined,
             icon: '🔔',
@@ -297,21 +367,61 @@ function getMenuSections(role: StoredUser['role'], unreadNotifications: number):
             label: 'Notifications',
           },
           { icon: '🔖', key: 'bookmarks', label: 'Bookmarks' },
-          { icon: '🗂️', key: 'archive', label: 'Archive' },
+          { icon: '🗂️', key: 'archive', label: 'Notice archive' },
         ],
       },
       {
         heading: 'Location & Events',
-        items: [{ icon: '🗺️', key: 'location', label: 'Map & nearby' }],
+        items: [
+          { icon: '📍', key: 'shareLocation', label: 'Share location' },
+          { icon: '🗺️', key: 'nearby', label: 'Nearby events' },
+          { icon: '📍', key: 'eventMap', label: 'Event map' },
+        ],
       },
       {
         heading: 'Account',
-        items: [{ icon: '👤', key: 'profile', label: 'Profile' }],
+        items: [{ icon: '👤', key: 'profile', label: 'My profile' }],
+      },
+      {
+        heading: 'General',
+        items: [{ icon: '❓', key: 'help', label: 'Help & support' }],
       },
     ];
   }
 
-  return [
+  if (role === 'super_admin') {
+    return [
+      {
+        heading: 'Main',
+        items: [
+          { icon: '👑', key: 'dashboard', label: 'Dashboard' },
+          { icon: '🚨', key: 'emergency', label: 'Emergency alert' },
+        ],
+      },
+      {
+        heading: 'User Management',
+        items: [
+          { icon: '👥', key: 'manageUsers', label: 'Manage all users' },
+          { icon: '🔄', key: 'studentSync', label: 'Student sync' },
+        ],
+      },
+      {
+        heading: 'Notice Management',
+        items: [
+          { icon: '➕', key: 'create', label: 'Create notice' },
+          { icon: '📍', key: 'createLocation', label: 'Create location event' },
+          { icon: '📋', key: 'manage', label: 'Manage notices' },
+          { icon: '🗺️', key: 'eventMap', label: 'Event map' },
+        ],
+      },
+      {
+        heading: 'Account',
+        items: [{ icon: '👤', key: 'profile', label: 'My profile' }],
+      },
+    ];
+  }
+
+  const sections: MenuSection[] = [
     {
       heading: 'Main',
       items: [{ icon: '📊', key: 'dashboard', label: 'Dashboard' }],
@@ -319,19 +429,32 @@ function getMenuSections(role: StoredUser['role'], unreadNotifications: number):
     {
       heading: 'Notice Management',
       items: [
-        { icon: '📋', key: 'manage', label: 'Manage notices' },
         { icon: '➕', key: 'create', label: 'Create notice' },
+        { icon: '📍', key: 'createLocation', label: 'Create location event' },
+        { icon: '📋', key: 'manage', label: 'My notices' },
       ],
     },
     {
       heading: 'Location & Events',
-      items: [{ icon: '🗺️', key: 'location', label: 'Map & nearby' }],
+      items: [
+        { icon: '🗺️', key: 'nearby', label: 'Nearby events' },
+        { icon: '📍', key: 'eventMap', label: 'Event map view' },
+      ],
     },
     {
       heading: 'Account',
-      items: [{ icon: '👤', key: 'profile', label: 'Profile' }],
+      items: [{ icon: '👤', key: 'profile', label: 'My profile' }],
     },
   ];
+
+  if (role === 'admin' && ['dean_of_students', 'faculty', 'hod'].includes(adminType || '')) {
+    sections.splice(2, 0, {
+      heading: 'User Management',
+      items: [{ icon: '🔄', key: 'studentSync', label: 'Sync students' }],
+    });
+  }
+
+  return sections;
 }
 
 const styles = StyleSheet.create({

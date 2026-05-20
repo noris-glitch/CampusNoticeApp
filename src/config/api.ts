@@ -27,6 +27,9 @@ export const API_PATHS = {
   profile: '/ajax/api/profile.php',
   adminNotices: '/ajax/api/admin_notices.php',
   locations: '/ajax/api/locations.php',
+  emergencyAlerts: '/ajax/api/emergency_alerts.php',
+  manageUsers: '/ajax/api/manage_users.php',
+  studentSync: '/ajax/api/student_sync.php',
 } as const;
 
 export type UserRole = 'student' | 'admin' | 'super_admin';
@@ -236,6 +239,70 @@ export interface LocationHubResponse {
   success: boolean;
   supported: boolean;
   user_location: SharedLocation | null;
+}
+
+export interface EmergencyAlertItem {
+  author_name?: string | null;
+  created_at: string;
+  expires_at?: string | null;
+  id: number;
+  is_active: number;
+  message: string;
+  read_count: number;
+  severity: string;
+  target_faculty?: number | null;
+  target_year?: number | null;
+  title: string;
+  total_recipients: number;
+}
+
+export interface EmergencyAlertsResponse {
+  active_count: number;
+  alerts: EmergencyAlertItem[];
+  faculties: FacultyOption[];
+  severities: Record<string, string>;
+  success: boolean;
+  years: YearOption[];
+}
+
+export interface ManagedUserItem {
+  admin_type?: string | null;
+  created_at: string;
+  email: string;
+  faculty_id?: number | null;
+  faculty_name?: string | null;
+  id: number;
+  is_active: number;
+  membership?: string | null;
+  name: string;
+  role: UserRole;
+  student_id?: string | null;
+  year?: number | null;
+}
+
+export interface ManageUsersResponse {
+  admin_types: Record<string, string>;
+  faculties: FacultyOption[];
+  stats: {
+    active_users: number;
+    total_admins: number;
+    total_students: number;
+    total_super_admins: number;
+    total_users: number;
+  };
+  success: boolean;
+  users: ManagedUserItem[];
+  years: YearOption[];
+}
+
+export interface StudentSyncResponse {
+  issues: string[];
+  message?: string;
+  note?: string;
+  sample_columns: string[];
+  skipped: number;
+  success: boolean;
+  updated: number;
 }
 
 export interface SimpleSuccessResponse {
@@ -678,6 +745,102 @@ export async function saveUserLocation(
     ...payload,
     action: 'save_location',
   });
+}
+
+export async function fetchEmergencyAlerts(user: StoredUser): Promise<EmergencyAlertsResponse> {
+  return getRequest<EmergencyAlertsResponse>(API_PATHS.emergencyAlerts, authParams(user));
+}
+
+export async function createEmergencyAlert(
+  user: StoredUser,
+  payload: {
+    expires_at?: string | null;
+    message: string;
+    severity: string;
+    target_faculty?: number | null;
+    target_year?: number | null;
+    title: string;
+  }
+): Promise<SimpleSuccessResponse> {
+  return postRequest<SimpleSuccessResponse>(API_PATHS.emergencyAlerts, {
+    ...authParams(user),
+    ...payload,
+    action: 'create',
+  });
+}
+
+export async function fetchManageUsers(user: StoredUser): Promise<ManageUsersResponse> {
+  return getRequest<ManageUsersResponse>(API_PATHS.manageUsers, authParams(user));
+}
+
+export async function createManagedUser(
+  user: StoredUser,
+  payload: {
+    admin_type?: string | null;
+    email: string;
+    faculty_id?: number | null;
+    membership?: string | null;
+    name: string;
+    password: string;
+    role: UserRole;
+    student_id: string;
+    year?: number | null;
+  }
+): Promise<SimpleSuccessResponse> {
+  return postRequest<SimpleSuccessResponse>(API_PATHS.manageUsers, {
+    ...authParams(user),
+    ...payload,
+    action: 'create',
+  });
+}
+
+export async function updateManagedUser(
+  user: StoredUser,
+  payload: {
+    admin_type?: string | null;
+    email: string;
+    faculty_id?: number | null;
+    is_active: boolean;
+    membership?: string | null;
+    name: string;
+    role: UserRole;
+    user_id: number;
+    year?: number | null;
+  }
+): Promise<SimpleSuccessResponse> {
+  return postRequest<SimpleSuccessResponse>(API_PATHS.manageUsers, {
+    ...authParams(user),
+    ...payload,
+    action: 'update',
+  });
+}
+
+export async function deleteManagedUser(user: StoredUser, userId: number): Promise<SimpleSuccessResponse> {
+  return postRequest<SimpleSuccessResponse>(API_PATHS.manageUsers, {
+    ...authParams(user),
+    action: 'delete',
+    user_id: userId,
+  });
+}
+
+export async function fetchStudentSyncInfo(user: StoredUser): Promise<StudentSyncResponse> {
+  return getRequest<StudentSyncResponse>(API_PATHS.studentSync, authParams(user));
+}
+
+export async function uploadStudentSyncFile(
+  user: StoredUser,
+  asset: UploadAsset
+): Promise<StudentSyncResponse> {
+  return postMultipartRequest<StudentSyncResponse>(
+    API_PATHS.studentSync,
+    {
+      ...authParams(user),
+      action: 'upload_csv',
+    },
+    {
+      csv_file: asset,
+    }
+  );
 }
 
 export function getApiErrorMessage(error: unknown, fallback: string): string {

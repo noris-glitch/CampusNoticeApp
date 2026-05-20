@@ -37,12 +37,19 @@ const palette = {
 
 interface Props {
   isActive: boolean;
+  mode?: 'hub' | 'map' | 'nearby' | 'share';
   onDirty: () => void;
   refreshToken: number;
   session: StoredUser;
 }
 
-export default function LocationEventsSection({ isActive, onDirty, refreshToken, session }: Props) {
+export default function LocationEventsSection({
+  isActive,
+  mode = 'hub',
+  onDirty,
+  refreshToken,
+  session,
+}: Props) {
   const [hub, setHub] = useState<LocationHubResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -85,6 +92,10 @@ export default function LocationEventsSection({ isActive, onDirty, refreshToken,
 
   const featuredEvents = hub?.nearby_events?.length ? hub.nearby_events : hub?.events || [];
   const mapHtml = buildMapHtml(hub?.events || [], hub?.user_location || null);
+  const intro = getLocationIntro(mode);
+  const showShareTools = mode === 'hub' || mode === 'share' || mode === 'nearby';
+  const showMap = mode === 'hub' || mode === 'map';
+  const showEvents = mode === 'hub' || mode === 'nearby';
 
   const handleShareCurrentLocation = async () => {
     setSaving(true);
@@ -146,36 +157,36 @@ export default function LocationEventsSection({ isActive, onDirty, refreshToken,
   return (
     <ScrollView contentContainerStyle={styles.screen}>
       <View>
-        <Text style={styles.headline}>Location & events</Text>
-        <Text style={styles.subtitle}>
-          Share your location, see nearby activities, and browse the campus event map in one place.
-        </Text>
+        <Text style={styles.headline}>{intro.title}</Text>
+        <Text style={styles.subtitle}>{intro.subtitle}</Text>
       </View>
 
-      <View style={styles.panel}>
-        <Text style={styles.sectionTitle}>My campus location</Text>
-        <Text style={styles.helper}>
-          Nearby event alerts work better when your current location is saved.
-        </Text>
-        <TextInput
-          placeholder="Optional label, for example Library block"
-          placeholderTextColor={palette.muted}
-          style={styles.input}
-          value={customLabel}
-          onChangeText={setCustomLabel}
-        />
-        {hub?.user_location ? (
-          <View style={styles.locationCard}>
-            <Text style={styles.locationTitle}>{hub.user_location.location_name || 'Shared location'}</Text>
-            <Text style={styles.locationBody}>
-              {hub.user_location.location_address || `${hub.user_location.latitude.toFixed(5)}, ${hub.user_location.longitude.toFixed(5)}`}
-            </Text>
-          </View>
-        ) : null}
-        <Pressable disabled={saving} style={styles.primaryButton} onPress={() => void handleShareCurrentLocation()}>
-          <Text style={styles.primaryButtonText}>{saving ? 'Saving location...' : 'Use my current location'}</Text>
-        </Pressable>
-      </View>
+      {showShareTools ? (
+        <View style={styles.panel}>
+          <Text style={styles.sectionTitle}>My campus location</Text>
+          <Text style={styles.helper}>
+            Nearby event alerts work better when your current location is saved.
+          </Text>
+          <TextInput
+            placeholder="Optional label, for example Library block"
+            placeholderTextColor={palette.muted}
+            style={styles.input}
+            value={customLabel}
+            onChangeText={setCustomLabel}
+          />
+          {hub?.user_location ? (
+            <View style={styles.locationCard}>
+              <Text style={styles.locationTitle}>{hub.user_location.location_name || 'Shared location'}</Text>
+              <Text style={styles.locationBody}>
+                {hub.user_location.location_address || `${hub.user_location.latitude.toFixed(5)}, ${hub.user_location.longitude.toFixed(5)}`}
+              </Text>
+            </View>
+          ) : null}
+          <Pressable disabled={saving} style={styles.primaryButton} onPress={() => void handleShareCurrentLocation()}>
+            <Text style={styles.primaryButtonText}>{saving ? 'Saving location...' : 'Use my current location'}</Text>
+          </Pressable>
+        </View>
+      ) : null}
 
       {loading ? (
         <View style={styles.stateCard}>
@@ -201,75 +212,104 @@ export default function LocationEventsSection({ isActive, onDirty, refreshToken,
 
       {!loading && !error && hub?.supported ? (
         <>
-          <View style={styles.panel}>
-            <Text style={styles.sectionTitle}>Campus event map</Text>
-            {hub.events.length > 0 ? (
-              <View style={styles.mapFrame}>
-                <WebView
-                  domStorageEnabled
-                  javaScriptEnabled
-                  originWhitelist={['*']}
-                  scrollEnabled={false}
-                  source={{ html: mapHtml }}
-                  style={styles.mapView}
-                />
-              </View>
-            ) : (
-              <View style={styles.stateCard}>
-                <Text style={styles.emptyTitle}>No mapped events yet</Text>
-                <Text style={styles.stateText}>
-                  Once location-enabled notices are published, they will appear here automatically.
-                </Text>
-              </View>
-            )}
-          </View>
+          {showMap ? (
+            <View style={styles.panel}>
+              <Text style={styles.sectionTitle}>Campus event map</Text>
+              {hub.events.length > 0 ? (
+                <View style={styles.mapFrame}>
+                  <WebView
+                    domStorageEnabled
+                    javaScriptEnabled
+                    originWhitelist={['*']}
+                    scrollEnabled={false}
+                    source={{ html: mapHtml }}
+                    style={styles.mapView}
+                  />
+                </View>
+              ) : (
+                <View style={styles.stateCard}>
+                  <Text style={styles.emptyTitle}>No mapped events yet</Text>
+                  <Text style={styles.stateText}>
+                    Once location-enabled notices are published, they will appear here automatically.
+                  </Text>
+                </View>
+              )}
+            </View>
+          ) : null}
 
-          <View style={styles.panel}>
-            <Text style={styles.sectionTitle}>
-              {hub.nearby_events.length > 0 ? 'Nearby events' : 'Location-enabled notices'}
-            </Text>
-            <Text style={styles.helper}>
-              {hub.nearby_events.length > 0
-                ? 'Events inside the saved-radius view for your campus location.'
-                : 'These notices have map coordinates and can be explored on the map above.'}
-            </Text>
+          {showEvents ? (
+            <View style={styles.panel}>
+              <Text style={styles.sectionTitle}>
+                {hub.nearby_events.length > 0 ? 'Nearby events' : 'Location-enabled notices'}
+              </Text>
+              <Text style={styles.helper}>
+                {hub.nearby_events.length > 0
+                  ? 'Events inside the saved-radius view for your campus location.'
+                  : 'These notices have map coordinates and can be explored on the campus map.'}
+              </Text>
 
-            {featuredEvents.length === 0 ? (
-              <View style={styles.stateCard}>
-                <Text style={styles.emptyTitle}>Nothing to show yet</Text>
-                <Text style={styles.stateText}>
-                  Save your location first, or wait for a mapped event to be posted.
-                </Text>
-              </View>
-            ) : (
-              featuredEvents.map((event) => (
-                <View key={event.id} style={styles.eventCard}>
-                  <View style={styles.tagRow}>
-                    <Text style={styles.tag}>{event.category || 'Event'}</Text>
-                    {typeof event.distance === 'number' ? (
-                      <Text style={[styles.tag, styles.distanceTag]}>{event.distance.toFixed(1)} km away</Text>
+              {featuredEvents.length === 0 ? (
+                <View style={styles.stateCard}>
+                  <Text style={styles.emptyTitle}>Nothing to show yet</Text>
+                  <Text style={styles.stateText}>
+                    Save your location first, or wait for a mapped event to be posted.
+                  </Text>
+                </View>
+              ) : (
+                featuredEvents.map((event) => (
+                  <View key={event.id} style={styles.eventCard}>
+                    <View style={styles.tagRow}>
+                      <Text style={styles.tag}>{event.category || 'Event'}</Text>
+                      {typeof event.distance === 'number' ? (
+                        <Text style={[styles.tag, styles.distanceTag]}>{event.distance.toFixed(1)} km away</Text>
+                      ) : null}
+                    </View>
+                    <Text style={styles.eventTitle}>{event.title}</Text>
+                    <Text style={styles.eventMeta}>
+                      {event.location_name || 'Campus location'} · {formatDateLabel(event.event_date || event.publish_at || event.created_at)}
+                    </Text>
+                    <Text numberOfLines={4} style={styles.eventBody}>
+                      {event.content}
+                    </Text>
+                    {event.attachment ? (
+                      <Pressable style={styles.secondaryButton} onPress={() => void openAttachment(event)}>
+                        <Text style={styles.secondaryButtonText}>Open attachment</Text>
+                      </Pressable>
                     ) : null}
                   </View>
-                  <Text style={styles.eventTitle}>{event.title}</Text>
-                  <Text style={styles.eventMeta}>
-                    {event.location_name || 'Campus location'} · {formatDateLabel(event.event_date || event.publish_at || event.created_at)}
-                  </Text>
-                  <Text numberOfLines={4} style={styles.eventBody}>
-                    {event.content}
-                  </Text>
-                  {event.attachment ? (
-                    <Pressable style={styles.secondaryButton} onPress={() => void openAttachment(event)}>
-                      <Text style={styles.secondaryButtonText}>Open attachment</Text>
-                    </Pressable>
-                  ) : null}
-                </View>
-              ))
-            )}
-          </View>
+                ))
+              )}
+            </View>
+          ) : null}
         </>
       ) : null}
     </ScrollView>
   );
+}
+
+function getLocationIntro(mode: NonNullable<Props['mode']>) {
+  switch (mode) {
+    case 'share':
+      return {
+        title: 'Share location',
+        subtitle: 'Save your current campus location so nearby event alerts can target you better.',
+      };
+    case 'nearby':
+      return {
+        title: 'Nearby events',
+        subtitle: 'See location-enabled notices happening close to your saved campus position.',
+      };
+    case 'map':
+      return {
+        title: 'Event map',
+        subtitle: 'Browse all location-enabled campus notices on the live event map.',
+      };
+    default:
+      return {
+        title: 'Location & events',
+        subtitle: 'Share your location, see nearby activities, and browse the campus event map in one place.',
+      };
+  }
 }
 
 function formatDateLabel(value?: string | null) {
