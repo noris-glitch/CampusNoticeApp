@@ -7,9 +7,6 @@
     "icon": "./assets/images/icon.png",
     "scheme": "campusnoticeapp",
     "userInterfaceStyle": "automatic",
-    "ios": {
-      "icon": "./assets/expo.icon"
-    },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
@@ -17,7 +14,9 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.jackomondi.CampusNoticeApp",
+      "usesCleartextTraffic": true
     },
     "web": {
       "output": "static",
@@ -25,6 +24,18 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow $(PRODUCT_NAME) to access your photos so you can upload your profile picture."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow $(PRODUCT_NAME) to use your location for campus event maps and nearby alerts."
+        }
+      ],
       [
         "expo-splash-screen",
         {
@@ -39,6 +50,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "1df58039-02cc-4739-a0bb-483655ebbf2c"
+      }
     }
   }
 }

@@ -1,0 +1,667 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import axios from 'axios';
+
+export const API_BASE_URL = 'https://campus-notice.onrender.com';
+export const WEB_BASE_URL = API_BASE_URL;
+export const SESSION_STORAGE_KEY = 'campus_notice_session';
+
+const apiClient = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 15000,
+  headers: {
+    Accept: 'application/json',
+  },
+});
+
+export const API_PATHS = {
+  warmup: '/login.php',
+  login: '/ajax/api/login.php',
+  bootstrap: '/ajax/api/bootstrap.php',
+  notices: '/ajax/api/notices.php',
+  noticeActions: '/ajax/api/notice_actions.php',
+  notifications: '/ajax/api/notifications.php',
+  bookmarks: '/ajax/api/bookmarks.php',
+  archive: '/ajax/api/archive.php',
+  profile: '/ajax/api/profile.php',
+  adminNotices: '/ajax/api/admin_notices.php',
+  locations: '/ajax/api/locations.php',
+} as const;
+
+export type UserRole = 'student' | 'admin' | 'super_admin';
+
+export interface UploadAsset {
+  mimeType?: string | null;
+  name: string;
+  uri: string;
+}
+
+export interface StoredUser {
+  admin_type?: string | null;
+  email: string;
+  faculty_id?: number | null;
+  faculty_name?: string | null;
+  membership?: string | null;
+  name: string;
+  profile_picture?: string | null;
+  profile_picture_url?: string | null;
+  role: UserRole;
+  role_label?: string | null;
+  student_id?: string | null;
+  token: string;
+  user_id: number;
+  year?: number | null;
+}
+
+export interface FacultyOption {
+  dean_name?: string | null;
+  id: number;
+  name: string;
+}
+
+export interface NoticeItem {
+  acknowledgement_due_at?: string | null;
+  acknowledgement_status?: string | null;
+  ack_done?: number;
+  ack_total?: number;
+  approval_status?: string | null;
+  attachment?: string | null;
+  attachment_url?: string | null;
+  author_name?: string | null;
+  bookmark_count?: number;
+  category?: string | null;
+  content: string;
+  created_at: string;
+  delivery_channels?: string | null;
+  email_failed?: number;
+  email_sent?: number;
+  event_date?: string | null;
+  event_end_date?: string | null;
+  expire_at?: string | null;
+  faculty_target?: number | null;
+  has_viewed?: number;
+  id: number;
+  is_bookmarked?: number;
+  is_pinned?: number;
+  latitude?: number | null;
+  location_address?: string | null;
+  location_name?: string | null;
+  longitude?: number | null;
+  open_questions?: number;
+  posted_by?: number;
+  priority?: string | null;
+  publish_at?: string | null;
+  radius_km?: number | null;
+  recurrence_pattern?: string | null;
+  requires_acknowledgement?: number;
+  review_notes?: string | null;
+  status?: string | null;
+  template_id?: number | null;
+  title: string;
+  view_count?: number;
+  year_target?: number | null;
+}
+
+export interface NotificationItem {
+  created_at: string;
+  id: number;
+  is_read: number;
+  message: string;
+  notice_id?: number | null;
+  notice_title?: string | null;
+  time_ago?: string | null;
+  title: string;
+}
+
+export interface StudentDashboardData {
+  bookmark_count: number;
+  recent_notices: NoticeItem[];
+  unread_count: number;
+  urgent_count: number;
+  viewed_count: number;
+}
+
+export interface AdminDashboardData {
+  open_questions: number;
+  pending_approvals: number;
+  recent_notices: NoticeItem[];
+  recent_students: Array<{
+    created_at: string;
+    email: string;
+    id: number;
+    name: string;
+    year?: number | null;
+  }>;
+  total_bookmarks: number;
+  total_notices: number;
+  total_students: number;
+  total_views: number;
+}
+
+export interface BootstrapResponse {
+  categories: string[];
+  dashboard: AdminDashboardData | StudentDashboardData;
+  faculties: FacultyOption[];
+  success: boolean;
+  unread_notifications: number;
+  user: StoredUser;
+}
+
+export interface NotificationsResponse {
+  notifications: NotificationItem[];
+  success: boolean;
+  unread_count: number;
+}
+
+export interface NoticesResponse {
+  notices: NoticeItem[];
+  success: boolean;
+}
+
+export interface ProfileResponse {
+  categories: string[];
+  faculties: FacultyOption[];
+  notification_preferences: {
+    categories: string[];
+    email_enabled: number;
+    emergency_override: number;
+    in_app_enabled: number;
+    quiet_hours_end?: string | null;
+    quiet_hours_start?: string | null;
+  };
+  stats: {
+    bookmark_count: number;
+    notice_count: number;
+    viewed_count: number;
+  };
+  success: boolean;
+  user: StoredUser;
+}
+
+export interface TemplateOption {
+  author_name?: string | null;
+  category?: string | null;
+  content: string;
+  default_priority?: string | null;
+  delivery_channels?: string | null;
+  faculty_target?: number | null;
+  id: number;
+  is_pinned?: number;
+  is_recurring?: number;
+  name: string;
+  recurrence_pattern?: string | null;
+  requires_acknowledgement?: number;
+  title: string;
+  year_target?: number | null;
+}
+
+export interface AdminNoticesResponse {
+  categories: string[];
+  faculties: FacultyOption[];
+  notices: NoticeItem[];
+  priorities: Record<string, string>;
+  recurrence_options: Record<string, string>;
+  success: boolean;
+  templates: TemplateOption[];
+  years: Array<{ label: string; value: number }>;
+}
+
+export interface SharedLocation {
+  latitude: number;
+  location_address?: string | null;
+  location_name?: string | null;
+  longitude: number;
+  updated_at?: string | null;
+}
+
+export interface LocationEventItem extends NoticeItem {
+  distance?: number | null;
+}
+
+export interface LocationHubResponse {
+  events: LocationEventItem[];
+  nearby_events: LocationEventItem[];
+  success: boolean;
+  supported: boolean;
+  user_location: SharedLocation | null;
+}
+
+export interface SimpleSuccessResponse {
+  action?: string;
+  delivery_summary?: {
+    email_failed: number;
+    email_sent: number;
+    in_app: number;
+    users: number;
+  } | null;
+  error?: string;
+  message?: string;
+  notice_id?: number;
+  result?: {
+    decision: string;
+    status: string;
+  };
+  status?: string;
+  success: boolean;
+  user?: StoredUser;
+}
+
+export interface CreateAdminNoticePayload {
+  acknowledgement_due_at?: string | null;
+  attachment?: UploadAsset | null;
+  category: string;
+  content: string;
+  delivery_channels: string[];
+  event_date?: string | null;
+  event_end_date?: string | null;
+  expire_date?: string | null;
+  faculty_target?: number | null;
+  is_location_event?: boolean;
+  is_pinned?: boolean;
+  is_recurring_template?: boolean;
+  latitude?: number | null;
+  location_address?: string | null;
+  location_name?: string | null;
+  longitude?: number | null;
+  priority: string;
+  radius_km?: number | null;
+  recurrence_pattern?: string | null;
+  requires_acknowledgement?: boolean;
+  save_as_template?: boolean;
+  schedule_date?: string | null;
+  submission_action: 'publish' | 'save_draft' | 'submit';
+  template_id?: number | null;
+  template_name?: string | null;
+  title: string;
+  year_target?: number | null;
+}
+
+function authParams(user: StoredUser) {
+  return {
+    token: user.token,
+    user_id: user.user_id,
+  };
+}
+
+async function getRequest<T>(path: string, params?: Record<string, unknown>): Promise<T> {
+  const response = await apiClient.get<T>(path, { params });
+  return response.data;
+}
+
+async function postRequest<T>(path: string, payload: Record<string, unknown>): Promise<T> {
+  const response = await apiClient.post<T>(path, payload, {
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+  return response.data;
+}
+
+function appendFormValue(formData: FormData, key: string, value: unknown): void {
+  if (value === undefined || value === null || value === '') {
+    return;
+  }
+
+  if (Array.isArray(value)) {
+    value.forEach((item) => {
+      if (item !== undefined && item !== null && item !== '') {
+        formData.append(`${key}[]`, String(item));
+      }
+    });
+    return;
+  }
+
+  if (typeof value === 'boolean') {
+    formData.append(key, value ? '1' : '0');
+    return;
+  }
+
+  formData.append(key, String(value));
+}
+
+function appendUploadAsset(formData: FormData, field: string, asset?: UploadAsset | null): void {
+  if (!asset) {
+    return;
+  }
+
+  formData.append(field, {
+    uri: asset.uri,
+    name: asset.name,
+    type: asset.mimeType || 'application/octet-stream',
+  } as any);
+}
+
+async function postMultipartRequest<T>(
+  path: string,
+  payload: Record<string, unknown>,
+  files?: Record<string, UploadAsset | null | undefined>
+): Promise<T> {
+  const formData = new FormData();
+
+  Object.entries(payload).forEach(([key, value]) => {
+    appendFormValue(formData, key, value);
+  });
+
+  Object.entries(files || {}).forEach(([field, asset]) => {
+    appendUploadAsset(formData, field, asset);
+  });
+
+  const response = await fetch(apiUrl(path), {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+    },
+    body: formData,
+  });
+
+  const rawText = await response.text();
+  const parsed = rawText ? (JSON.parse(rawText) as T & { error?: string; success?: boolean }) : ({} as T);
+
+  if (!response.ok) {
+    if (parsed && typeof parsed === 'object' && 'error' in parsed && typeof parsed.error === 'string') {
+      throw new Error(parsed.error);
+    }
+    throw new Error(rawText || 'The upload request failed.');
+  }
+
+  return parsed as T;
+}
+
+export function apiUrl(path: string): string {
+  return `${API_BASE_URL}${path}`;
+}
+
+export function webUrl(path: string): string {
+  return `${WEB_BASE_URL}${path}`;
+}
+
+export function noticeAttachmentUrl(attachment?: string | null): string | null {
+  if (!attachment) {
+    return null;
+  }
+
+  return `${API_BASE_URL}/assets/uploads/${attachment}`;
+}
+
+export function profilePictureUrl(profilePicture?: string | null): string | null {
+  if (!profilePicture) {
+    return `${API_BASE_URL}/assets/uploads/profiles/default-avatar.png`;
+  }
+
+  if (/^https?:\/\//i.test(profilePicture)) {
+    return profilePicture;
+  }
+
+  return `${API_BASE_URL}/assets/uploads/profiles/${profilePicture}`;
+}
+
+export async function warmUpServer(): Promise<void> {
+  await apiClient.get(API_PATHS.warmup, {
+    responseType: 'text',
+    timeout: 15000,
+  });
+}
+
+export async function saveSession(user: StoredUser): Promise<void> {
+  await AsyncStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(user));
+}
+
+export async function loadSession(): Promise<StoredUser | null> {
+  const stored = await AsyncStorage.getItem(SESSION_STORAGE_KEY);
+  if (!stored) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(stored) as StoredUser;
+  } catch {
+    await AsyncStorage.removeItem(SESSION_STORAGE_KEY);
+    return null;
+  }
+}
+
+export async function clearSession(): Promise<void> {
+  await AsyncStorage.removeItem(SESSION_STORAGE_KEY);
+}
+
+export async function loginWithPassword(email: string, password: string): Promise<StoredUser> {
+  const response = await postRequest<StoredUser & { success: boolean; error?: string }>(API_PATHS.login, {
+    email,
+    password,
+  });
+
+  if (!response.success) {
+    throw new Error(response.error || 'Login failed');
+  }
+
+  return response;
+}
+
+export async function fetchBootstrap(user: StoredUser): Promise<BootstrapResponse> {
+  return getRequest<BootstrapResponse>(API_PATHS.bootstrap, authParams(user));
+}
+
+export async function fetchNotices(user: StoredUser): Promise<NoticeItem[]> {
+  const response = await getRequest<NoticesResponse>(API_PATHS.notices, authParams(user));
+  return response.notices;
+}
+
+export async function fetchNoticeDetail(user: StoredUser, noticeId: number): Promise<NoticeItem> {
+  const response = await getRequest<{ notice: NoticeItem; success: boolean }>(API_PATHS.noticeActions, {
+    ...authParams(user),
+    notice_id: noticeId,
+  });
+
+  return response.notice;
+}
+
+export async function toggleNoticeBookmark(user: StoredUser, noticeId: number): Promise<SimpleSuccessResponse> {
+  return postRequest<SimpleSuccessResponse>(API_PATHS.noticeActions, {
+    ...authParams(user),
+    action: 'bookmark',
+    notice_id: noticeId,
+  });
+}
+
+export async function acknowledgeNotice(user: StoredUser, noticeId: number): Promise<SimpleSuccessResponse> {
+  return postRequest<SimpleSuccessResponse>(API_PATHS.noticeActions, {
+    ...authParams(user),
+    action: 'acknowledge',
+    notice_id: noticeId,
+  });
+}
+
+export async function markNoticeViewed(user: StoredUser, noticeId: number): Promise<SimpleSuccessResponse> {
+  return postRequest<SimpleSuccessResponse>(API_PATHS.noticeActions, {
+    ...authParams(user),
+    action: 'view',
+    notice_id: noticeId,
+  });
+}
+
+export async function fetchNotifications(user: StoredUser): Promise<NotificationsResponse> {
+  return getRequest<NotificationsResponse>(API_PATHS.notifications, authParams(user));
+}
+
+export async function runNotificationAction(
+  user: StoredUser,
+  action: 'mark_all_read' | 'mark_read' | 'delete_all',
+  notificationId?: number
+): Promise<SimpleSuccessResponse> {
+  return postRequest<SimpleSuccessResponse>(API_PATHS.notifications, {
+    ...authParams(user),
+    action,
+    notification_id: notificationId,
+  });
+}
+
+export async function fetchBookmarks(user: StoredUser): Promise<NoticeItem[]> {
+  const response = await getRequest<{ bookmarks: NoticeItem[]; success: boolean }>(
+    API_PATHS.bookmarks,
+    authParams(user)
+  );
+  return response.bookmarks;
+}
+
+export async function fetchArchiveNotices(user: StoredUser): Promise<NoticeItem[]> {
+  const response = await getRequest<NoticesResponse>(API_PATHS.archive, authParams(user));
+  return response.notices;
+}
+
+export async function fetchProfile(user: StoredUser): Promise<ProfileResponse> {
+  return getRequest<ProfileResponse>(API_PATHS.profile, authParams(user));
+}
+
+export async function uploadProfilePhoto(
+  user: StoredUser,
+  asset: UploadAsset
+): Promise<SimpleSuccessResponse> {
+  return postMultipartRequest<SimpleSuccessResponse>(
+    API_PATHS.profile,
+    {
+      ...authParams(user),
+      action: 'upload_profile_picture',
+    },
+    {
+      profile_picture: asset,
+    }
+  );
+}
+
+export async function updateProfile(
+  user: StoredUser,
+  payload: {
+    email: string;
+    faculty_id?: number | null;
+    membership?: string | null;
+    name: string;
+    year?: number | null;
+  }
+): Promise<SimpleSuccessResponse> {
+  return postRequest<SimpleSuccessResponse>(API_PATHS.profile, {
+    ...authParams(user),
+    ...payload,
+    action: 'update_profile',
+  });
+}
+
+export async function saveNotificationPreferences(
+  user: StoredUser,
+  payload: {
+    categories: string[];
+    email_enabled: boolean;
+    emergency_override: boolean;
+    in_app_enabled: boolean;
+    quiet_hours_end?: string | null;
+    quiet_hours_start?: string | null;
+  }
+): Promise<SimpleSuccessResponse> {
+  return postRequest<SimpleSuccessResponse>(API_PATHS.profile, {
+    ...authParams(user),
+    ...payload,
+    action: 'save_preferences',
+  });
+}
+
+export async function changePassword(
+  user: StoredUser,
+  payload: {
+    confirm_password: string;
+    current_password: string;
+    new_password: string;
+  }
+): Promise<SimpleSuccessResponse> {
+  return postRequest<SimpleSuccessResponse>(API_PATHS.profile, {
+    ...authParams(user),
+    ...payload,
+    action: 'change_password',
+  });
+}
+
+export async function fetchAdminNotices(user: StoredUser): Promise<AdminNoticesResponse> {
+  return getRequest<AdminNoticesResponse>(API_PATHS.adminNotices, authParams(user));
+}
+
+export async function createAdminNotice(
+  user: StoredUser,
+  payload: CreateAdminNoticePayload
+): Promise<SimpleSuccessResponse> {
+  const { attachment, ...fields } = payload;
+
+  return postMultipartRequest<SimpleSuccessResponse>(
+    API_PATHS.adminNotices,
+    {
+      ...authParams(user),
+      ...fields,
+      action: 'create',
+    },
+    {
+      attachment,
+    }
+  );
+}
+
+export async function runAdminNoticeAction(
+  user: StoredUser,
+  payload: {
+    action: 'archive' | 'approve' | 'delete' | 'publish_now' | 'reject' | 'submit_for_review';
+    notice_id: number;
+    review_notes?: string;
+  }
+): Promise<SimpleSuccessResponse> {
+  return postRequest<SimpleSuccessResponse>(API_PATHS.adminNotices, {
+    ...authParams(user),
+    ...payload,
+  });
+}
+
+export async function fetchLocationHub(user: StoredUser): Promise<LocationHubResponse> {
+  return getRequest<LocationHubResponse>(API_PATHS.locations, authParams(user));
+}
+
+export async function saveUserLocation(
+  user: StoredUser,
+  payload: SharedLocation
+): Promise<SimpleSuccessResponse> {
+  return postRequest<SimpleSuccessResponse>(API_PATHS.locations, {
+    ...authParams(user),
+    ...payload,
+    action: 'save_location',
+  });
+}
+
+export function getApiErrorMessage(error: unknown, fallback: string): string {
+  if (axios.isAxiosError(error)) {
+    const responseData = error.response?.data;
+
+    if (
+      responseData &&
+      typeof responseData === 'object' &&
+      'error' in responseData &&
+      typeof responseData.error === 'string'
+    ) {
+      return responseData.error;
+    }
+
+    if (typeof responseData === 'string' && responseData.trim() !== '') {
+      return responseData;
+    }
+
+    if (error.code === 'ECONNABORTED') {
+      return 'The server took too long to respond. Please try again in a few seconds.';
+    }
+
+    if (error.message === 'Network Error') {
+      return 'Could not reach the server. If Render was asleep, wait a few seconds and try again.';
+    }
+
+    if (typeof error.message === 'string' && error.message.trim() !== '') {
+      return error.message;
+    }
+  }
+
+  if (error instanceof Error && error.message.trim() !== '') {
+    return error.message;
+  }
+
+  return fallback;
+}
