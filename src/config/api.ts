@@ -13,6 +13,22 @@ const apiClient = axios.create({
   },
 });
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function ensureApiObject<T>(value: unknown, fallback: string): T {
+  if (isPlainObject(value)) {
+    return value as T;
+  }
+
+  if (typeof value === 'string' && value.trim() !== '') {
+    throw new Error(value.trim());
+  }
+
+  throw new Error(fallback);
+}
+
 export const API_PATHS = {
   warmup: '/login.php',
   login: '/ajax/api/login.php',
@@ -464,7 +480,7 @@ function authParams(user: StoredUser) {
 
 async function getRequest<T>(path: string, params?: Record<string, unknown>): Promise<T> {
   const response = await apiClient.get<T>(path, { params });
-  return response.data;
+  return ensureApiObject<T>(response.data, 'The server returned an unexpected response.');
 }
 
 async function postRequest<T>(path: string, payload: Record<string, unknown>): Promise<T> {
@@ -473,7 +489,7 @@ async function postRequest<T>(path: string, payload: Record<string, unknown>): P
       'Content-Type': 'application/json',
     },
   });
-  return response.data;
+  return ensureApiObject<T>(response.data, 'The server returned an unexpected response.');
 }
 
 function appendFormValue(formData: FormData, key: string, value: unknown): void {
@@ -534,7 +550,15 @@ async function postMultipartRequest<T>(
   });
 
   const rawText = await response.text();
-  const parsed = rawText ? (JSON.parse(rawText) as T & { error?: string; success?: boolean }) : ({} as T);
+  let parsed: T & { error?: string; success?: boolean };
+
+  try {
+    parsed = rawText
+      ? (JSON.parse(rawText) as T & { error?: string; success?: boolean })
+      : ({} as T & { error?: string; success?: boolean });
+  } catch {
+    throw new Error(rawText || 'The server returned an unexpected response.');
+  }
 
   if (!response.ok) {
     if (parsed && typeof parsed === 'object' && 'error' in parsed && typeof parsed.error === 'string') {
@@ -629,7 +653,18 @@ export async function loginWithPassword(email: string, password: string): Promis
 }
 
 export async function fetchRegistrationOptions(): Promise<RegistrationOptionsResponse> {
-  return getRequest<RegistrationOptionsResponse>(API_PATHS.register);
+  const response = await getRequest<RegistrationOptionsResponse>(API_PATHS.register);
+
+  if (
+    !response.success ||
+    !Array.isArray(response.faculties) ||
+    !Array.isArray(response.departments) ||
+    !Array.isArray(response.years)
+  ) {
+    throw new Error('Registration options are temporarily unavailable.');
+  }
+
+  return response;
 }
 
 export async function registerStudent(payload: {
