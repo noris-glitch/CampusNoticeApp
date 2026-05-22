@@ -44,6 +44,8 @@ const palette = {
   warmSoft: '#ffe8dd',
 };
 
+const MAX_SHORT_VIDEO_BYTES = 50 * 1024 * 1024;
+
 interface ShortsSectionProps {
   isActive: boolean;
   onDirty: () => void;
@@ -150,6 +152,18 @@ function formatDateLabel(value?: string | null) {
   }
 
   return date.toLocaleString();
+}
+
+function formatFileSize(bytes?: number | null) {
+  if (!bytes || bytes <= 0) {
+    return null;
+  }
+
+  if (bytes < 1024 * 1024) {
+    return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  }
+
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function targetSummary(short: ShortItem) {
@@ -315,7 +329,17 @@ export default function ShortsSection({ isActive, onDirty, refreshToken, session
         return;
       }
 
+      const fileSize = asset.fileSize ?? null;
+      if (fileSize && fileSize > MAX_SHORT_VIDEO_BYTES) {
+        Alert.alert(
+          'Shorts',
+          'Please choose a shorter or more compressed video. For reliable uploads, keep shorts under 50 MB.'
+        );
+        return;
+      }
+
       setSelectedVideo({
+        fileSize,
         mimeType: asset.mimeType || 'video/mp4',
         name: asset.fileName || `short-${Date.now()}.mp4`,
         uri: asset.uri,
@@ -564,7 +588,7 @@ export default function ShortsSection({ isActive, onDirty, refreshToken, session
           <Pressable onPress={() => void pickVideo()} style={styles.filePicker}>
             <Text style={styles.filePickerText}>
               {selectedVideo
-                ? `${selectedVideo.name} · ${durationSeconds || 0}s`
+                ? `${selectedVideo.name} · ${durationSeconds || 0}s${selectedVideo.fileSize ? ` · ${formatFileSize(selectedVideo.fileSize)}` : ''}`
                 : 'Choose a video from your library'}
             </Text>
           </Pressable>

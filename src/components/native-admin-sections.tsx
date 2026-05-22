@@ -17,14 +17,17 @@ import {
 import {
   AdminDashboardData,
   createAdminNotice,
+  fetchNoticeDetail,
   fetchAdminNotices,
   getApiErrorMessage,
+  NoticeDetailResponse,
   NoticeItem,
   noticeAttachmentUrl,
   runAdminNoticeAction,
   StoredUser,
   UploadAsset,
 } from '@/config/api';
+import { NoticeDetailModal } from '@/components/native-sections-common';
 
 const palette = {
   accent: '#0f7b6c',

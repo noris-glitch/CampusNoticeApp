@@ -16,8 +16,11 @@ import {
 } from 'react-native';
 
 import {
+  addNoticeComment,
   acknowledgeNotice,
+  answerNoticeComment,
   changePassword,
+  deleteNoticeComment,
   fetchArchiveNotices,
   fetchBookmarks,
   fetchNoticeDetail,
@@ -27,6 +30,8 @@ import {
   FacultyOption,
   getApiErrorMessage,
   markNoticeViewed,
+  NoticeCommentItem,
+  NoticeDetailResponse,
   NoticeItem,
   noticeAttachmentUrl,
   NotificationItem,
@@ -37,6 +42,7 @@ import {
   StoredUser,
   StudentDashboardData,
   toggleNoticeBookmark,
+  updateNoticeCommentStatus,
   updateProfile,
   uploadProfilePhoto,
 } from '@/config/api';
@@ -246,6 +252,16 @@ async function openNoticeAttachment(notice: NoticeItem) {
   await WebBrowser.openBrowserAsync(url);
 }
 
+function fallbackNoticeDetail(notice: NoticeItem): NoticeDetailResponse {
+  return {
+    can_comment: false,
+    can_moderate_comments: false,
+    comments: [],
+    notice,
+    success: true,
+  };
+}
+
 function NoticeCard({
   notice,
   onAcknowledge,
@@ -300,24 +316,107 @@ function NoticeCard({
   );
 }
 
-function NoticeDetailModal({
-  notice,
+export function NoticeDetailModal({
+  detail,
+  onDetailChange,
   onAcknowledge,
   onBookmark,
   onClose,
+  onDirty,
   readOnlyActions,
+  session,
 }: {
-  notice: NoticeItem | null;
+  detail: NoticeDetailResponse | null;
+  onDetailChange: (detail: NoticeDetailResponse | null) => void;
   onAcknowledge: (noticeId: number) => Promise<void> | void;
   onBookmark: (noticeId: number) => Promise<void> | void;
   onClose: () => void;
+  onDirty: () => void;
   readOnlyActions?: boolean;
+  session: StoredUser;
 }) {
-  if (!notice) {
+  const [commentText, setCommentText] = useState('');
+  const [answerDrafts, setAnswerDrafts] = useState<Record<number, string>>({});
+  const [working, setWorking] = useState(false);
+
+  useEffect(() => {
+    setCommentText('');
+    setAnswerDrafts({});
+  }, [detail?.notice.id]);
+
+  if (!detail) {
     return null;
   }
 
+  const notice = detail.notice;
   const isAcked = notice.acknowledgement_status === 'acknowledged';
+  const visibleComments = detail.comments.filter((item) => item.status !== 'hidden' || detail.can_moderate_comments);
+
+  const refreshDetail = async () => {
+    const next = await fetchNoticeDetail(session, notice.id);
+    onDetailChange(next);
+  };
+
+  const submitComment = async () => {
+    if (!commentText.trim()) {
+      Alert.alert('Comments', 'Please write your comment first.');
+      return;
+    }
+
+    setWorking(true);
+    try {
+      const result = await addNoticeComment(session, notice.id, commentText.trim());
+      Alert.alert('Comments', result.message || 'Comment posted successfully.');
+      setCommentText('');
+      await refreshDetail();
+      onDirty();
+    } catch (commentError) {
+      Alert.alert('Comments', getApiErrorMessage(commentError, 'Could not post your comment.'));
+    } finally {
+      setWorking(false);
+    }
+  };
+
+  const respondToComment = async (comment: NoticeCommentItem) => {
+    const answer = (answerDrafts[comment.id] || '').trim();
+    if (!answer) {
+      Alert.alert('Comments', 'Please write a reply first.');
+      return;
+    }
+
+    setWorking(true);
+    try {
+      const result = await answerNoticeComment(session, notice.id, comment.id, answer);
+      Alert.alert('Comments', result.message || 'Reply posted successfully.');
+      setAnswerDrafts((current) => ({ ...current, [comment.id]: '' }));
+      await refreshDetail();
+      onDirty();
+    } catch (replyError) {
+      Alert.alert('Comments', getApiErrorMessage(replyError, 'Could not send that reply.'));
+    } finally {
+      setWorking(false);
+    }
+  };
+
+  const moderateComment = async (
+    comment: NoticeCommentItem,
+    action: 'delete_comment' | 'hide_comment' | 'reopen_comment'
+  ) => {
+    setWorking(true);
+    try {
+      const result =
+        action === 'delete_comment'
+          ? await deleteNoticeComment(session, notice.id, comment.id)
+          : await updateNoticeCommentStatus(session, notice.id, comment.id, action);
+      Alert.alert('Comments', result.message || 'Comment updated successfully.');
+      await refreshDetail();
+      onDirty();
+    } catch (moderationError) {
+      Alert.alert('Comments', getApiErrorMessage(moderationError, 'Could not update that comment.'));
+    } finally {
+      setWorking(false);
+    }
+  };
 
   return (
     <Modal animationType="slide" transparent visible onRequestClose={onClose}>
@@ -343,6 +442,101 @@ function NoticeDetailModal({
                 Acknowledgement due: {formatDateLabel(notice.acknowledgement_due_at)}
               </Text>
             ) : null}
+            <View style={styles.commentsBlock}>
+              <Text style={styles.commentsTitle}>Comments & clarifications</Text>
+              <Text style={styles.helperText}>
+                Students can ask for clarification here, and super admins can post official replies or moderate the thread.
+              </Text>
+              {detail.can_comment ? (
+                <View style={styles.commentComposer}>
+                  <TextInput
+                    multiline
+                    placeholder="Ask a question or leave a comment about this notice"
+                    placeholderTextColor={palette.muted}
+                    style={[styles.input, styles.commentInput]}
+                    value={commentText}
+                    onChangeText={setCommentText}
+                  />
+                  <ActionButton
+                    disabled={working}
+                    label={working ? 'Posting...' : 'Post comment'}
+                    onPress={() => void submitComment()}
+                    tone="accent"
+                  />
+                </View>
+              ) : null}
+              {visibleComments.length === 0 ? (
+                <Text style={styles.helperText}>No comments yet.</Text>
+              ) : (
+                visibleComments.map((comment) => (
+                  <View key={comment.id} style={styles.commentCard}>
+                    <View style={styles.inlineRowWrap}>
+                      <Badge label={comment.status.replace('_', ' ')} tone={comment.status === 'hidden' ? 'danger' : 'accent'} />
+                    </View>
+                    <Text style={styles.commentAuthor}>
+                      {comment.asker_name} · {formatDateLabel(comment.created_at)}
+                    </Text>
+                    <Text style={styles.commentText}>{comment.question}</Text>
+                    {comment.answer ? (
+                      <View style={styles.commentAnswerCard}>
+                        <Text style={styles.commentAnswerTitle}>Official reply</Text>
+                        <Text style={styles.commentText}>{comment.answer}</Text>
+                        <Text style={styles.metaText}>
+                          {comment.answerer_name || 'Super admin'} · {formatDateLabel(comment.answered_at)}
+                        </Text>
+                      </View>
+                    ) : null}
+                    {detail.can_moderate_comments ? (
+                      <>
+                        {!comment.answer ? (
+                          <>
+                            <TextInput
+                              multiline
+                              placeholder="Write an official reply"
+                              placeholderTextColor={palette.muted}
+                              style={[styles.input, styles.commentInput]}
+                              value={answerDrafts[comment.id] || ''}
+                              onChangeText={(value) =>
+                                setAnswerDrafts((current) => ({ ...current, [comment.id]: value }))
+                              }
+                            />
+                            <ActionButton
+                              disabled={working}
+                              label="Reply"
+                              onPress={() => void respondToComment(comment)}
+                              tone="navy"
+                            />
+                          </>
+                        ) : null}
+                        <View style={styles.actionRow}>
+                          {comment.status !== 'hidden' ? (
+                            <ActionButton
+                              disabled={working}
+                              label="Hide"
+                              onPress={() => void moderateComment(comment, 'hide_comment')}
+                              tone="warm"
+                            />
+                          ) : (
+                            <ActionButton
+                              disabled={working}
+                              label="Reopen"
+                              onPress={() => void moderateComment(comment, 'reopen_comment')}
+                              tone="accent"
+                            />
+                          )}
+                          <ActionButton
+                            disabled={working}
+                            label="Delete"
+                            onPress={() => void moderateComment(comment, 'delete_comment')}
+                            tone="danger"
+                          />
+                        </View>
+                      </>
+                    ) : null}
+                  </View>
+                ))
+              )}
+            </View>
           </ScrollView>
           <View style={styles.actionRow}>
             {!readOnlyActions ? (
@@ -375,7 +569,7 @@ export function StudentFeedSection({
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
-  const [selectedNotice, setSelectedNotice] = useState<NoticeItem | null>(null);
+  const [selectedNotice, setSelectedNotice] = useState<NoticeDetailResponse | null>(null);
   const deferredSearch = useDeferredValue(search.trim().toLowerCase());
 
   useEffect(() => {
@@ -423,7 +617,7 @@ export function StudentFeedSection({
   });
 
   const openNotice = async (notice: NoticeItem) => {
-    setSelectedNotice(notice);
+    setSelectedNotice(fallbackNoticeDetail(notice));
 
     try {
       await markNoticeViewed(session, notice.id);
@@ -462,8 +656,8 @@ export function StudentFeedSection({
         )
       );
       setSelectedNotice((current) =>
-        current && current.id === noticeId
-          ? { ...current, acknowledgement_status: 'acknowledged' }
+        current && current.notice.id === noticeId
+          ? { ...current, notice: { ...current.notice, acknowledgement_status: 'acknowledged' } }
           : current
       );
       onDirty();
@@ -531,10 +725,13 @@ export function StudentFeedSection({
       ))}
 
       <NoticeDetailModal
-        notice={selectedNotice}
+        detail={selectedNotice}
+        onDetailChange={setSelectedNotice}
         onAcknowledge={handleAcknowledge}
         onBookmark={handleBookmark}
         onClose={() => setSelectedNotice(null)}
+        onDirty={onDirty}
+        session={session}
       />
     </ScrollView>
   );
@@ -549,7 +746,7 @@ export function NotificationsSection({
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedNotice, setSelectedNotice] = useState<NoticeItem | null>(null);
+  const [selectedNotice, setSelectedNotice] = useState<NoticeDetailResponse | null>(null);
 
   useEffect(() => {
     if (!isActive) {
@@ -660,11 +857,14 @@ export function NotificationsSection({
       ))}
 
       <NoticeDetailModal
-        notice={selectedNotice}
+        detail={selectedNotice}
+        onDetailChange={setSelectedNotice}
         onAcknowledge={() => Promise.resolve()}
         onBookmark={() => Promise.resolve()}
         onClose={() => setSelectedNotice(null)}
+        onDirty={onDirty}
         readOnlyActions
+        session={session}
       />
     </ScrollView>
   );
@@ -674,7 +874,7 @@ export function BookmarksSection({ categories, isActive, onDirty, refreshToken, 
   const [bookmarks, setBookmarks] = useState<NoticeItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedNotice, setSelectedNotice] = useState<NoticeItem | null>(null);
+  const [selectedNotice, setSelectedNotice] = useState<NoticeDetailResponse | null>(null);
   const [search, setSearch] = useState('');
   const deferredSearch = useDeferredValue(search.trim().toLowerCase());
 
@@ -762,21 +962,29 @@ export function BookmarksSection({ categories, isActive, onDirty, refreshToken, 
           notice={notice}
           onAcknowledge={() => Promise.resolve()}
           onBookmark={handleBookmark}
-          onPress={() => setSelectedNotice(notice)}
+          onPress={() => {
+            setSelectedNotice(fallbackNoticeDetail(notice));
+            void fetchNoticeDetail(session, notice.id)
+              .then(setSelectedNotice)
+              .catch(() => {});
+          }}
         />
       ))}
 
       <NoticeDetailModal
-        notice={selectedNotice}
+        detail={selectedNotice}
+        onDetailChange={setSelectedNotice}
         onAcknowledge={() => Promise.resolve()}
         onBookmark={handleBookmark}
         onClose={() => setSelectedNotice(null)}
+        onDirty={onDirty}
+        session={session}
       />
     </ScrollView>
   );
 }
 
-export function ArchiveSection({ categories, isActive, refreshToken, session }: NoticeListProps) {
+export function ArchiveSection({ categories, isActive, onDirty, refreshToken, session }: NoticeListProps) {
   const [archive, setArchive] = useState<NoticeItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -784,7 +992,7 @@ export function ArchiveSection({ categories, isActive, refreshToken, session }: 
   const [category, setCategory] = useState('All');
   const [priority, setPriority] = useState('All');
   const [status, setStatus] = useState<'all' | 'current' | 'expired'>('all');
-  const [selectedNotice, setSelectedNotice] = useState<NoticeItem | null>(null);
+  const [selectedNotice, setSelectedNotice] = useState<NoticeDetailResponse | null>(null);
   const deferredSearch = useDeferredValue(search.trim().toLowerCase());
 
   useEffect(() => {
@@ -889,17 +1097,25 @@ export function ArchiveSection({ categories, isActive, refreshToken, session }: 
           notice={notice}
           onAcknowledge={() => Promise.resolve()}
           onBookmark={() => Promise.resolve()}
-          onPress={() => setSelectedNotice(notice)}
+          onPress={() => {
+            setSelectedNotice(fallbackNoticeDetail(notice));
+            void fetchNoticeDetail(session, notice.id)
+              .then(setSelectedNotice)
+              .catch(() => {});
+          }}
           readOnlyBookmark
         />
       ))}
 
       <NoticeDetailModal
-        notice={selectedNotice}
+        detail={selectedNotice}
+        onDetailChange={setSelectedNotice}
         onAcknowledge={() => Promise.resolve()}
         onBookmark={() => Promise.resolve()}
         onClose={() => setSelectedNotice(null)}
+        onDirty={onDirty}
         readOnlyActions
+        session={session}
       />
     </ScrollView>
   );
@@ -1493,6 +1709,56 @@ const styles = StyleSheet.create({
   },
   chipTextActive: {
     color: '#ffffff',
+  },
+  commentAnswerCard: {
+    backgroundColor: '#ffffff',
+    borderColor: palette.line,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginTop: 10,
+    padding: 12,
+  },
+  commentAnswerTitle: {
+    color: palette.navy,
+    fontSize: 12,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+  },
+  commentAuthor: {
+    color: palette.muted,
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: 10,
+  },
+  commentCard: {
+    backgroundColor: '#eef4fb',
+    borderRadius: 16,
+    marginTop: 12,
+    padding: 14,
+  },
+  commentComposer: {
+    marginTop: 12,
+  },
+  commentInput: {
+    minHeight: 96,
+    textAlignVertical: 'top',
+  },
+  commentText: {
+    color: palette.ink,
+    fontSize: 14,
+    lineHeight: 21,
+    marginTop: 8,
+  },
+  commentsBlock: {
+    borderTopColor: palette.line,
+    borderTopWidth: 1,
+    marginTop: 18,
+    paddingTop: 18,
+  },
+  commentsTitle: {
+    color: palette.ink,
+    fontSize: 18,
+    fontWeight: '900',
   },
   emptyTitle: {
     color: palette.ink,

@@ -1,5 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
+import { fetch as expoFetch } from 'expo/fetch';
+import { Directory, File, Paths } from 'expo-file-system';
 
 export const API_BASE_URL = 'https://campus-notice.onrender.com';
 export const WEB_BASE_URL = API_BASE_URL;
@@ -34,6 +36,7 @@ export const API_PATHS = {
   login: '/ajax/api/login.php',
   register: '/ajax/api/register.php',
   passwordReset: '/ajax/api/password_reset.php',
+  feedback: '/ajax/api/feedback.php',
   bootstrap: '/ajax/api/bootstrap.php',
   notices: '/ajax/api/notices.php',
   noticeActions: '/ajax/api/notice_actions.php',
@@ -52,6 +55,7 @@ export const API_PATHS = {
 export type UserRole = 'student' | 'admin' | 'super_admin';
 
 export interface UploadAsset {
+  fileSize?: number | null;
   mimeType?: string | null;
   name: string;
   uri: string;
@@ -145,6 +149,28 @@ export interface NoticeItem {
   year_target?: number | null;
 }
 
+export interface NoticeCommentItem {
+  answer?: string | null;
+  answered_at?: string | null;
+  answered_by?: number | null;
+  answerer_name?: string | null;
+  asked_by: number;
+  asker_name: string;
+  created_at: string;
+  id: number;
+  notice_id: number;
+  question: string;
+  status: string;
+}
+
+export interface NoticeDetailResponse {
+  can_comment: boolean;
+  can_moderate_comments: boolean;
+  comments: NoticeCommentItem[];
+  notice: NoticeItem;
+  success: boolean;
+}
+
 export interface ShortItem {
   audience_roles_csv?: string | null;
   author_name?: string | null;
@@ -211,6 +237,38 @@ export interface BootstrapResponse {
   success: boolean;
   unread_notifications: number;
   user: StoredUser;
+}
+
+export interface FeedbackItem {
+  admin_response?: string | null;
+  category: string;
+  created_at: string;
+  id: number;
+  message: string;
+  responded_at?: string | null;
+  responded_by?: number | null;
+  responder_name?: string | null;
+  status: string;
+  subject: string;
+  submitted_by: number;
+  submitter_email?: string | null;
+  submitter_name?: string | null;
+  updated_at?: string | null;
+}
+
+export interface FeedbackResponse {
+  can_moderate: boolean;
+  categories: string[];
+  items: FeedbackItem[];
+  stats: {
+    closed: number;
+    in_review: number;
+    open: number;
+    responded: number;
+    total: number;
+  };
+  statuses: Record<string, string>;
+  success: boolean;
 }
 
 export interface NotificationsResponse {
@@ -519,11 +577,69 @@ function appendUploadAsset(formData: FormData, field: string, asset?: UploadAsse
     return;
   }
 
-  formData.append(field, {
-    uri: asset.uri,
-    name: asset.name,
-    type: asset.mimeType || 'application/octet-stream',
-  } as any);
+  formData.append(field, buildUploadFile(asset, field));
+}
+
+function sanitizeUploadStem(value: string): string {
+  const stem = value.replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-+|-+$/g, '');
+  return stem || 'upload';
+}
+
+function normalizeUploadExtension(asset: UploadAsset, source: File): string {
+  const assetExtension = asset.name.includes('.') ? asset.name.split('.').pop() || '' : '';
+  const sourceExtension = source.extension.startsWith('.') ? source.extension.slice(1) : source.extension;
+  const mimeExtension = (() => {
+    switch ((asset.mimeType || '').toLowerCase()) {
+      case 'image/jpeg':
+      case 'image/jpg':
+        return 'jpg';
+      case 'image/png':
+        return 'png';
+      case 'image/webp':
+        return 'webp';
+      case 'video/mp4':
+        return 'mp4';
+      case 'video/quicktime':
+        return 'mov';
+      case 'video/x-m4v':
+        return 'm4v';
+      case 'video/webm':
+        return 'webm';
+      case 'text/csv':
+      case 'application/csv':
+      case 'application/vnd.ms-excel':
+        return 'csv';
+      default:
+        return '';
+    }
+  })();
+
+  return (assetExtension || sourceExtension || mimeExtension).toLowerCase();
+}
+
+function buildUploadFile(asset: UploadAsset, field: string): File {
+  const source = new File(asset.uri);
+  if (!source.exists) {
+    throw new Error('The selected file is no longer available. Please choose it again.');
+  }
+
+  const extension = normalizeUploadExtension(asset, source);
+  const assetBaseName = asset.name.includes('.')
+    ? asset.name.slice(0, asset.name.lastIndexOf('.'))
+    : asset.name;
+  const targetStem = sanitizeUploadStem(assetBaseName || field);
+  const targetName = `${Date.now()}-${targetStem}${extension ? `.${extension}` : ''}`;
+
+  const uploadCache = new Directory(Paths.cache, 'campusnotice-uploads');
+  uploadCache.create({ idempotent: true, intermediates: true });
+
+  const normalizedFile = new File(uploadCache, targetName);
+  if (normalizedFile.exists) {
+    normalizedFile.delete();
+  }
+
+  source.copy(normalizedFile);
+  return normalizedFile;
 }
 
 async function postMultipartRequest<T>(
@@ -541,7 +657,7 @@ async function postMultipartRequest<T>(
     appendUploadAsset(formData, field, asset);
   });
 
-  const response = await fetch(apiUrl(path), {
+  const response = await expoFetch(apiUrl(path), {
     method: 'POST',
     headers: {
       Accept: 'application/json',
@@ -701,6 +817,53 @@ export async function submitPasswordReset(payload: {
   });
 }
 
+export async function fetchFeedback(user: StoredUser): Promise<FeedbackResponse> {
+  return getRequest<FeedbackResponse>(API_PATHS.feedback, authParams(user));
+}
+
+export async function submitFeedback(
+  user: StoredUser,
+  payload: {
+    category: string;
+    message: string;
+    subject: string;
+  }
+): Promise<SimpleSuccessResponse> {
+  return postRequest<SimpleSuccessResponse>(API_PATHS.feedback, {
+    ...authParams(user),
+    action: 'submit',
+    ...payload,
+  });
+}
+
+export async function respondToFeedback(
+  user: StoredUser,
+  payload: {
+    admin_response: string;
+    feedback_id: number;
+    status?: string;
+  }
+): Promise<SimpleSuccessResponse> {
+  return postRequest<SimpleSuccessResponse>(API_PATHS.feedback, {
+    ...authParams(user),
+    action: 'respond',
+    ...payload,
+  });
+}
+
+export async function updateFeedbackStatus(
+  user: StoredUser,
+  feedbackId: number,
+  status: string
+): Promise<SimpleSuccessResponse> {
+  return postRequest<SimpleSuccessResponse>(API_PATHS.feedback, {
+    ...authParams(user),
+    action: 'set_status',
+    feedback_id: feedbackId,
+    status,
+  });
+}
+
 export async function fetchBootstrap(user: StoredUser): Promise<BootstrapResponse> {
   return getRequest<BootstrapResponse>(API_PATHS.bootstrap, authParams(user));
 }
@@ -710,13 +873,13 @@ export async function fetchNotices(user: StoredUser): Promise<NoticeItem[]> {
   return response.notices;
 }
 
-export async function fetchNoticeDetail(user: StoredUser, noticeId: number): Promise<NoticeItem> {
-  const response = await getRequest<{ notice: NoticeItem; success: boolean }>(API_PATHS.noticeActions, {
+export async function fetchNoticeDetail(user: StoredUser, noticeId: number): Promise<NoticeDetailResponse> {
+  const response = await getRequest<NoticeDetailResponse>(API_PATHS.noticeActions, {
     ...authParams(user),
     notice_id: noticeId,
   });
 
-  return response.notice;
+  return response;
 }
 
 export async function toggleNoticeBookmark(user: StoredUser, noticeId: number): Promise<SimpleSuccessResponse> {
@@ -731,6 +894,61 @@ export async function acknowledgeNotice(user: StoredUser, noticeId: number): Pro
   return postRequest<SimpleSuccessResponse>(API_PATHS.noticeActions, {
     ...authParams(user),
     action: 'acknowledge',
+    notice_id: noticeId,
+  });
+}
+
+export async function addNoticeComment(
+  user: StoredUser,
+  noticeId: number,
+  comment: string
+): Promise<SimpleSuccessResponse> {
+  return postRequest<SimpleSuccessResponse>(API_PATHS.noticeActions, {
+    ...authParams(user),
+    action: 'add_comment',
+    comment,
+    notice_id: noticeId,
+  });
+}
+
+export async function answerNoticeComment(
+  user: StoredUser,
+  noticeId: number,
+  commentId: number,
+  answer: string
+): Promise<SimpleSuccessResponse> {
+  return postRequest<SimpleSuccessResponse>(API_PATHS.noticeActions, {
+    ...authParams(user),
+    action: 'answer_comment',
+    answer,
+    comment_id: commentId,
+    notice_id: noticeId,
+  });
+}
+
+export async function updateNoticeCommentStatus(
+  user: StoredUser,
+  noticeId: number,
+  commentId: number,
+  action: 'hide_comment' | 'reopen_comment'
+): Promise<SimpleSuccessResponse> {
+  return postRequest<SimpleSuccessResponse>(API_PATHS.noticeActions, {
+    ...authParams(user),
+    action,
+    comment_id: commentId,
+    notice_id: noticeId,
+  });
+}
+
+export async function deleteNoticeComment(
+  user: StoredUser,
+  noticeId: number,
+  commentId: number
+): Promise<SimpleSuccessResponse> {
+  return postRequest<SimpleSuccessResponse>(API_PATHS.noticeActions, {
+    ...authParams(user),
+    action: 'delete_comment',
+    comment_id: commentId,
     notice_id: noticeId,
   });
 }
@@ -1067,6 +1285,10 @@ export function getApiErrorMessage(error: unknown, fallback: string): string {
   }
 
   if (error instanceof Error && error.message.trim() !== '') {
+    if (/network request failed/i.test(error.message)) {
+      return 'The upload could not reach the server. Re-select the file, confirm your connection, and try a smaller MP4 if the video is very large.';
+    }
+
     return error.message;
   }
 

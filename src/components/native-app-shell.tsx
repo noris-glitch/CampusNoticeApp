@@ -2,6 +2,7 @@ import React, { startTransition, useEffect, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { FeedbackInboxSection, StudentFeedbackSection } from '@/components/native-feedback-sections';
 import {
   EmergencyAlertsSection,
   HelpSupportSection,
@@ -36,6 +37,8 @@ type ScreenKey =
   | 'dashboard'
   | 'emergency'
   | 'eventMap'
+  | 'feedback'
+  | 'feedbackInbox'
   | 'feed'
   | 'help'
   | 'manage'
@@ -218,6 +221,14 @@ export default function NativeAppShell({
               session={session}
             />
           ) : null}
+          {activeScreen === 'feedback' ? (
+            <StudentFeedbackSection
+              isActive
+              onDirty={handleDirty}
+              refreshToken={refreshToken}
+              session={session}
+            />
+          ) : null}
           {activeScreen === 'shareLocation' ? (
             <LocationEventsSection
               isActive
@@ -300,6 +311,14 @@ export default function NativeAppShell({
           ) : null}
           {activeScreen === 'studentSync' ? (
             <StudentSyncSection
+              isActive
+              onDirty={handleDirty}
+              refreshToken={refreshToken}
+              session={session}
+            />
+          ) : null}
+          {activeScreen === 'feedbackInbox' ? (
+            <FeedbackInboxSection
               isActive
               onDirty={handleDirty}
               refreshToken={refreshToken}
@@ -395,7 +414,10 @@ function getMenuSections(
       },
       {
         heading: 'General',
-        items: [{ icon: '❓', key: 'help', label: 'Help & support' }],
+        items: [
+          { icon: '💬', key: 'feedback', label: 'Feedback' },
+          { icon: '❓', key: 'help', label: 'Help & support' },
+        ],
       },
     ];
   }
@@ -416,6 +438,10 @@ function getMenuSections(
           { icon: '👥', key: 'manageUsers', label: 'Manage all users' },
           { icon: '🔄', key: 'studentSync', label: 'Student sync' },
         ],
+      },
+      {
+        heading: 'Engagement',
+        items: [{ icon: '💬', key: 'feedbackInbox', label: 'Feedback inbox' }],
       },
       {
         heading: 'Notice Management',
