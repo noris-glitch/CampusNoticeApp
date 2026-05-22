@@ -1,16 +1,20 @@
 import * as ImagePicker from 'expo-image-picker';
-import React, { useDeferredValue, useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  FlatList,
   Modal,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
+  ViewToken,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 
 import {
@@ -40,8 +44,9 @@ const palette = {
   line: '#d9e3ef',
   muted: '#60738a',
   navy: '#17324d',
+  navyDeep: '#0b1826',
+  navySoft: '#17324dcc',
   warm: '#ff8a5b',
-  warmSoft: '#ffe8dd',
 };
 
 const MAX_SHORT_VIDEO_BYTES = 50 * 1024 * 1024;
@@ -51,45 +56,6 @@ interface ShortsSectionProps {
   onDirty: () => void;
   refreshToken: number;
   session: StoredUser;
-}
-
-function SectionIntro({ subtitle, title }: { subtitle: string; title: string }) {
-  return (
-    <View>
-      <Text style={styles.headline}>{title}</Text>
-      <Text style={styles.subtitle}>{subtitle}</Text>
-    </View>
-  );
-}
-
-function Panel({ children }: { children: React.ReactNode }) {
-  return <View style={styles.panel}>{children}</View>;
-}
-
-function LoadingState({ label }: { label: string }) {
-  return (
-    <View style={styles.stateCard}>
-      <ActivityIndicator color={palette.accent} />
-      <Text style={styles.stateText}>{label}</Text>
-    </View>
-  );
-}
-
-function ErrorState({ message }: { message: string }) {
-  return (
-    <View style={[styles.stateCard, styles.errorCard]}>
-      <Text style={styles.errorText}>{message}</Text>
-    </View>
-  );
-}
-
-function EmptyState({ body, title }: { body: string; title: string }) {
-  return (
-    <View style={styles.stateCard}>
-      <Text style={styles.emptyTitle}>{title}</Text>
-      <Text style={styles.stateText}>{body}</Text>
-    </View>
-  );
 }
 
 function ActionButton({
@@ -135,9 +101,35 @@ function ChoicePill({
   onPress: () => void;
 }) {
   return (
-    <Pressable style={[styles.pill, active ? styles.pillActive : null]} onPress={onPress}>
+    <Pressable onPress={onPress} style={[styles.pill, active ? styles.pillActive : null]}>
       <Text style={[styles.pillText, active ? styles.pillTextActive : null]}>{label}</Text>
     </Pressable>
+  );
+}
+
+function EmptyState({ body, title }: { body: string; title: string }) {
+  return (
+    <View style={styles.stateCard}>
+      <Text style={styles.emptyTitle}>{title}</Text>
+      <Text style={styles.stateText}>{body}</Text>
+    </View>
+  );
+}
+
+function ErrorState({ message }: { message: string }) {
+  return (
+    <View style={[styles.stateCard, styles.errorCard]}>
+      <Text style={styles.errorText}>{message}</Text>
+    </View>
+  );
+}
+
+function LoadingState({ label }: { label: string }) {
+  return (
+    <View style={styles.stateCard}>
+      <ActivityIndicator color={palette.accent} />
+      <Text style={styles.stateText}>{label}</Text>
+    </View>
   );
 }
 
@@ -180,58 +172,91 @@ function targetSummary(short: ShortItem) {
   return scope.length > 0 ? scope.join(' · ') : 'Campus-wide';
 }
 
-function videoHtml(videoUrl: string) {
+function videoHtml(
+  videoUrl: string,
+  options?: {
+    autoplay?: boolean;
+    controls?: boolean;
+    loop?: boolean;
+    muted?: boolean;
+  }
+) {
   const safeUrl = JSON.stringify(videoUrl);
+  const attrs = [
+    options?.autoplay ? 'autoplay' : '',
+    options?.controls ? 'controls' : '',
+    options?.loop ? 'loop' : '',
+    options?.muted ? 'muted' : '',
+    'playsinline',
+    'preload="metadata"',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
   return `<!doctype html>
   <html>
     <head>
       <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
       <style>
-        html, body {
-          margin: 0;
-          padding: 0;
-          height: 100%;
-          background: #08131f;
-          color: #ffffff;
-          font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-        }
-        .wrap {
-          display: flex;
-          flex-direction: column;
-          justify-content: center;
-          height: 100%;
-        }
-        video {
-          width: 100%;
-          max-height: 100%;
-          background: #000000;
-        }
+        html, body { margin: 0; padding: 0; height: 100%; background: #08131f; color: #ffffff; overflow: hidden; }
+        .wrap { display: flex; height: 100%; justify-content: center; align-items: center; }
+        video { width: 100%; height: 100%; object-fit: cover; background: #000000; }
       </style>
     </head>
     <body>
       <div class="wrap">
-        <video controls playsinline preload="metadata" src=${safeUrl}></video>
+        <video ${attrs} src=${safeUrl}></video>
       </div>
     </body>
   </html>`;
 }
 
 export default function ShortsSection({ isActive, onDirty, refreshToken, session }: ShortsSectionProps) {
+  const insets = useSafeAreaInsets();
+  const { height } = useWindowDimensions();
   const [response, setResponse] = useState<ShortsResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [search, setSearch] = useState('');
+  const [composerVisible, setComposerVisible] = useState(false);
   const [title, setTitle] = useState('');
   const [caption, setCaption] = useState('');
   const [selectedVideo, setSelectedVideo] = useState<UploadAsset | null>(null);
   const [durationSeconds, setDurationSeconds] = useState<number | null>(null);
   const [selectedShort, setSelectedShort] = useState<ShortItem | null>(null);
-  const [facultyTarget, setFacultyTarget] = useState<number | null>(session.role === 'admin' ? session.faculty_id || null : null);
+  const [activeShortId, setActiveShortId] = useState<number | null>(null);
+  const [facultyTarget, setFacultyTarget] = useState<number | null>(
+    session.role === 'admin' ? session.faculty_id || null : null
+  );
   const [departmentTarget, setDepartmentTarget] = useState<number | null>(null);
   const [yearTarget, setYearTarget] = useState<number | null>(null);
   const [selectedAudienceRoles, setSelectedAudienceRoles] = useState<UserRole[]>([]);
-  const deferredSearch = useDeferredValue(search.trim().toLowerCase());
+  const feedCardHeight = Math.max(420, height - 250);
+
+  const viewabilityConfigCallbackPairs = useRef([
+    {
+      onViewableItemsChanged: ({ viewableItems }: { viewableItems: Array<ViewToken> }) => {
+        const firstVisible = viewableItems.find((item) => item.isViewable)?.item as ShortItem | undefined;
+        if (firstVisible?.id) {
+          setActiveShortId(firstVisible.id);
+        }
+      },
+      viewabilityConfig: {
+        itemVisiblePercentThreshold: 70,
+      },
+    },
+  ]);
+
+  const applyResponse = (next: ShortsResponse) => {
+    setResponse(next);
+    setActiveShortId((current) => {
+      if (current && next.shorts.some((short) => short.id === current)) {
+        return current;
+      }
+      return next.shorts[0]?.id ?? null;
+    });
+  };
 
   useEffect(() => {
     if (!isActive) {
@@ -246,7 +271,7 @@ export default function ShortsSection({ isActive, onDirty, refreshToken, session
       try {
         const next = await fetchShorts(session);
         if (isMounted) {
-          setResponse(next);
+          applyResponse(next);
         }
       } catch (loadError) {
         if (isMounted) {
@@ -285,18 +310,18 @@ export default function ShortsSection({ isActive, onDirty, refreshToken, session
     }
   }, [departmentTarget, visibleDepartments]);
 
-  const filteredShorts = (response?.shorts || []).filter((short) => {
-    if (deferredSearch === '') {
-      return true;
+  const refreshShorts = async () => {
+    setRefreshing(true);
+    setError(null);
+    try {
+      const next = await fetchShorts(session);
+      applyResponse(next);
+    } catch (refreshError) {
+      setError(getApiErrorMessage(refreshError, 'Could not refresh shorts right now.'));
+    } finally {
+      setRefreshing(false);
     }
-
-    return (
-      (short.title || '').toLowerCase().includes(deferredSearch) ||
-      short.caption.toLowerCase().includes(deferredSearch) ||
-      (short.author_name || '').toLowerCase().includes(deferredSearch) ||
-      (short.department_name || '').toLowerCase().includes(deferredSearch)
-    );
-  });
+  };
 
   const pickVideo = async () => {
     try {
@@ -390,9 +415,10 @@ export default function ShortsSection({ isActive, onDirty, refreshToken, session
       const result = await createShort(session, payload);
       Alert.alert('Shorts', result.message || 'Short posted successfully.');
       resetComposer();
+      setComposerVisible(false);
       onDirty();
       const refreshed = await fetchShorts(session);
-      setResponse(refreshed);
+      applyResponse(refreshed);
     } catch (saveError) {
       Alert.alert('Shorts', getApiErrorMessage(saveError, 'Could not post that short.'));
     } finally {
@@ -428,7 +454,7 @@ export default function ShortsSection({ isActive, onDirty, refreshToken, session
           };
         });
       } catch {
-        // A view metric should never block playback.
+        // View metrics should never block playback.
       }
     }
   };
@@ -454,7 +480,7 @@ export default function ShortsSection({ isActive, onDirty, refreshToken, session
       setSelectedShort((current) => (current?.id === shortId ? null : current));
       onDirty();
       const refreshed = await fetchShorts(session);
-      setResponse(refreshed);
+      applyResponse(refreshed);
     } catch (deleteError) {
       Alert.alert('Shorts', getApiErrorMessage(deleteError, 'Could not delete that short.'));
     }
@@ -463,217 +489,304 @@ export default function ShortsSection({ isActive, onDirty, refreshToken, session
   const scopeLocked = response?.student_scope_locked || session.role === 'student';
   const audienceRoles = response?.audience_roles || {};
   const years = response?.years || [];
+  const shorts = response?.shorts || [];
+
+  if (loading && !response) {
+    return (
+      <View style={styles.screenState}>
+        <LoadingState label="Loading campus shorts..." />
+      </View>
+    );
+  }
+
+  if (error && !response) {
+    return (
+      <View style={styles.screenState}>
+        <ErrorState message={error} />
+      </View>
+    );
+  }
 
   return (
     <>
-      <ScrollView contentContainerStyle={styles.screen}>
-        <SectionIntro
-          title="Shorts"
-          subtitle="Quick campus video updates for the right faculty, department, year, and role."
-        />
-
-        <Panel>
-          <Text style={styles.sectionTitle}>Post a short</Text>
-          <Text style={styles.helperText}>
-            Keep videos at 60 seconds or less. Your upload becomes visible to the audience you target here.
-          </Text>
-          {scopeLocked ? (
-            <View style={styles.scopeNotice}>
-              <Text style={styles.scopeNoticeText}>
-                Student uploads are automatically limited to students in your current faculty, department, and year profile.
-              </Text>
-            </View>
-          ) : null}
-
-          <Text style={styles.label}>Title</Text>
-          <TextInput
-            placeholder="Optional short headline"
-            placeholderTextColor={palette.muted}
-            style={styles.input}
-            value={title}
-            onChangeText={setTitle}
-          />
-
-          <Text style={styles.label}>Caption</Text>
-          <TextInput
-            multiline
-            placeholder="What should viewers know?"
-            placeholderTextColor={palette.muted}
-            style={[styles.input, styles.textArea]}
-            value={caption}
-            onChangeText={setCaption}
-          />
-
-          {!scopeLocked ? (
-            <>
-              <Text style={styles.label}>Target faculty</Text>
-              <View style={styles.wrapRow}>
-                <ChoicePill
-                  active={facultyTarget === null}
-                  label="All faculties"
-                  onPress={() => {
-                    setFacultyTarget(null);
-                    setDepartmentTarget(null);
-                  }}
-                />
-                {(response?.faculties || []).map((faculty) => (
-                  <ChoicePill
-                    key={faculty.id}
-                    active={facultyTarget === faculty.id}
-                    label={faculty.name}
-                    onPress={() => {
-                      setFacultyTarget(faculty.id);
-                      setDepartmentTarget(null);
-                    }}
-                  />
-                ))}
-              </View>
-
-              <Text style={styles.label}>Target department</Text>
-              <View style={styles.wrapRow}>
-                <ChoicePill
-                  active={departmentTarget === null}
-                  label="All departments"
-                  onPress={() => setDepartmentTarget(null)}
-                />
-                {visibleDepartments.map((department: DepartmentOption) => (
-                  <ChoicePill
-                    key={department.id}
-                    active={departmentTarget === department.id}
-                    label={department.name}
-                    onPress={() => setDepartmentTarget(department.id)}
-                  />
-                ))}
-              </View>
-
-              <Text style={styles.label}>Target year</Text>
-              <View style={styles.wrapRow}>
-                <ChoicePill active={yearTarget === null} label="All years" onPress={() => setYearTarget(null)} />
-                {years.map((yearOption: YearOption) => (
-                  <ChoicePill
-                    key={yearOption.value}
-                    active={yearTarget === yearOption.value}
-                    label={yearOption.label}
-                    onPress={() => setYearTarget(yearOption.value)}
-                  />
-                ))}
-              </View>
-
-              <Text style={styles.label}>Target roles</Text>
-              <View style={styles.wrapRow}>
-                <ChoicePill
-                  active={selectedAudienceRoles.length === 0}
-                  label="All roles"
-                  onPress={() => setSelectedAudienceRoles([])}
-                />
-                {Object.entries(audienceRoles).map(([role, label]) => (
-                  <ChoicePill
-                    key={role}
-                    active={selectedAudienceRoles.includes(role as UserRole)}
-                    label={label}
-                    onPress={() => {
-                      const nextRole = role as UserRole;
-                      setSelectedAudienceRoles((current) =>
-                        current.includes(nextRole)
-                          ? current.filter((item) => item !== nextRole)
-                          : [...current, nextRole]
-                      );
-                    }}
-                  />
-                ))}
-              </View>
-            </>
-          ) : null}
-
-          <Pressable onPress={() => void pickVideo()} style={styles.filePicker}>
-            <Text style={styles.filePickerText}>
-              {selectedVideo
-                ? `${selectedVideo.name} · ${durationSeconds || 0}s${selectedVideo.fileSize ? ` · ${formatFileSize(selectedVideo.fileSize)}` : ''}`
-                : 'Choose a video from your library'}
-            </Text>
-          </Pressable>
-
-          <View style={styles.actionRow}>
-            <ActionButton
-              disabled={saving}
-              label={saving ? 'Posting...' : 'Post short'}
-              onPress={() => void submitShort()}
-              tone="accent"
-            />
-            {selectedVideo ? (
-              <ActionButton
-                label="Clear"
-                onPress={resetComposer}
-                tone="navy"
-              />
-            ) : null}
+      <View style={styles.container}>
+        {error ? (
+          <View style={styles.banner}>
+            <Text style={styles.bannerText}>{error}</Text>
           </View>
-        </Panel>
-
-        <Panel>
-          <Text style={styles.sectionTitle}>Browse shorts</Text>
-          <TextInput
-            placeholder="Search by title, caption, or creator"
-            placeholderTextColor={palette.muted}
-            style={styles.input}
-            value={search}
-            onChangeText={setSearch}
-          />
-        </Panel>
-
-        {loading ? <LoadingState label="Loading campus shorts..." /> : null}
-        {error ? <ErrorState message={error} /> : null}
-
-        {!loading && !error && filteredShorts.length === 0 ? (
-          <EmptyState
-            title="No shorts yet"
-            body="The first short someone posts for your audience will show up here."
-          />
         ) : null}
 
-        {!loading && !error
-          ? filteredShorts.map((short) => (
-              <Panel key={short.id}>
-                <View style={styles.shortPreview}>
-                  <Text style={styles.previewKicker}>Campus short · {short.duration_seconds}s</Text>
-                  <Text style={styles.previewTitle}>{short.title?.trim() || 'Campus short'}</Text>
-                  <Text style={styles.previewBody} numberOfLines={4}>
-                    {short.caption}
+        <FlatList
+          contentContainerStyle={[
+            styles.feedContent,
+            {
+              paddingBottom: 120 + insets.bottom,
+              paddingTop: 12,
+            },
+          ]}
+          data={shorts}
+          decelerationRate="fast"
+          keyExtractor={(item) => item.id.toString()}
+          ListEmptyComponent={
+            <EmptyState
+              title="No shorts yet"
+              body="When someone posts a campus short for your audience, it will show up here."
+            />
+          }
+          onRefresh={() => void refreshShorts()}
+          pagingEnabled
+          refreshing={refreshing}
+          renderItem={({ item }) => {
+            const isActiveShort = item.id === activeShortId;
+            const videoUrl = shortVideoUrl(item.video_filename) || '';
+
+            return (
+              <View style={[styles.feedCard, { minHeight: feedCardHeight }]}>
+                <View style={styles.videoFrame}>
+                  {videoUrl ? (
+                    <WebView
+                      allowsInlineMediaPlayback
+                      mediaPlaybackRequiresUserAction={false}
+                      originWhitelist={['*']}
+                      pointerEvents="none"
+                      source={{
+                        html: videoHtml(videoUrl, {
+                          autoplay: isActiveShort,
+                          controls: false,
+                          loop: true,
+                          muted: true,
+                        }),
+                      }}
+                      style={styles.feedPlayer}
+                    />
+                  ) : (
+                    <View style={styles.videoFallback}>
+                      <Text style={styles.videoFallbackText}>Video preview unavailable</Text>
+                    </View>
+                  )}
+
+                  <View style={styles.videoShade} />
+
+                  <View style={styles.feedTopRow}>
+                    <View style={styles.durationChip}>
+                      <Text style={styles.durationChipText}>{item.duration_seconds}s</Text>
+                    </View>
+                    <Text style={styles.viewsText}>{item.view_count || 0} views</Text>
+                  </View>
+
+                  <View style={styles.feedBottom}>
+                    <Text numberOfLines={2} style={styles.feedTitle}>
+                      {item.title?.trim() || 'Campus short'}
+                    </Text>
+                    <Text numberOfLines={3} style={styles.feedCaption}>
+                      {item.caption}
+                    </Text>
+                    <Text numberOfLines={2} style={styles.feedMeta}>
+                      {item.author_name || 'Campus user'} · {formatDateLabel(item.created_at)}
+                    </Text>
+                    <Text numberOfLines={2} style={styles.feedMeta}>
+                      Audience: {targetSummary(item)}
+                    </Text>
+
+                    <View style={styles.feedActionRow}>
+                      <ActionButton label="Watch" onPress={() => void openShort(item)} tone="accent" />
+                      {item.can_manage ? (
+                        <ActionButton label="Delete" onPress={() => confirmDelete(item)} tone="danger" />
+                      ) : null}
+                    </View>
+                  </View>
+                </View>
+              </View>
+            );
+          }}
+          showsVerticalScrollIndicator={false}
+          snapToAlignment="start"
+          viewabilityConfigCallbackPairs={viewabilityConfigCallbackPairs.current as any}
+        />
+
+        <Pressable
+          onPress={() => setComposerVisible(true)}
+          style={[styles.fab, { bottom: 22 + insets.bottom }]}
+        >
+          <Text style={styles.fabPlus}>+</Text>
+          <Text style={styles.fabLabel}>Post</Text>
+        </Pressable>
+      </View>
+
+      <Modal
+        animationType="slide"
+        onRequestClose={() => setComposerVisible(false)}
+        transparent
+        visible={composerVisible}
+      >
+        <View style={styles.sheetBackdrop}>
+          <View style={[styles.sheet, { paddingBottom: 18 + insets.bottom }]}>
+            <View style={styles.sheetHeader}>
+              <View>
+                <Text style={styles.sheetTitle}>Post a short</Text>
+                <Text style={styles.sheetSubtitle}>Upload first, then fine-tune the audience if you need to.</Text>
+              </View>
+              <Pressable onPress={() => setComposerVisible(false)} style={styles.closeButton}>
+                <Text style={styles.closeButtonText}>Close</Text>
+              </Pressable>
+            </View>
+
+            <ScrollView contentContainerStyle={styles.sheetContent} showsVerticalScrollIndicator={false}>
+              {scopeLocked ? (
+                <View style={styles.scopeNotice}>
+                  <Text style={styles.scopeNoticeText}>
+                    Student uploads are automatically limited to students in your current faculty, department, and year profile.
                   </Text>
                 </View>
-                <Text style={styles.metaText}>
-                  {short.author_name || 'Campus user'} · {formatDateLabel(short.created_at)}
+              ) : null}
+
+              <Text style={styles.label}>Title</Text>
+              <TextInput
+                onChangeText={setTitle}
+                placeholder="Optional short headline"
+                placeholderTextColor={palette.muted}
+                style={styles.input}
+                value={title}
+              />
+
+              <Text style={styles.label}>Caption</Text>
+              <TextInput
+                multiline
+                onChangeText={setCaption}
+                placeholder="What should viewers know?"
+                placeholderTextColor={palette.muted}
+                style={[styles.input, styles.textArea]}
+                value={caption}
+              />
+
+              {!scopeLocked ? (
+                <>
+                  <Text style={styles.label}>Target faculty</Text>
+                  <View style={styles.wrapRow}>
+                    <ChoicePill
+                      active={facultyTarget === null}
+                      label="All faculties"
+                      onPress={() => {
+                        setFacultyTarget(null);
+                        setDepartmentTarget(null);
+                      }}
+                    />
+                    {(response?.faculties || []).map((faculty) => (
+                      <ChoicePill
+                        active={facultyTarget === faculty.id}
+                        key={faculty.id}
+                        label={faculty.name}
+                        onPress={() => {
+                          setFacultyTarget(faculty.id);
+                          setDepartmentTarget(null);
+                        }}
+                      />
+                    ))}
+                  </View>
+
+                  <Text style={styles.label}>Target department</Text>
+                  <View style={styles.wrapRow}>
+                    <ChoicePill
+                      active={departmentTarget === null}
+                      label="All departments"
+                      onPress={() => setDepartmentTarget(null)}
+                    />
+                    {visibleDepartments.map((department: DepartmentOption) => (
+                      <ChoicePill
+                        active={departmentTarget === department.id}
+                        key={department.id}
+                        label={department.name}
+                        onPress={() => setDepartmentTarget(department.id)}
+                      />
+                    ))}
+                  </View>
+
+                  <Text style={styles.label}>Target year</Text>
+                  <View style={styles.wrapRow}>
+                    <ChoicePill active={yearTarget === null} label="All years" onPress={() => setYearTarget(null)} />
+                    {years.map((yearOption: YearOption) => (
+                      <ChoicePill
+                        active={yearTarget === yearOption.value}
+                        key={yearOption.value}
+                        label={yearOption.label}
+                        onPress={() => setYearTarget(yearOption.value)}
+                      />
+                    ))}
+                  </View>
+
+                  <Text style={styles.label}>Target roles</Text>
+                  <View style={styles.wrapRow}>
+                    <ChoicePill
+                      active={selectedAudienceRoles.length === 0}
+                      label="All roles"
+                      onPress={() => setSelectedAudienceRoles([])}
+                    />
+                    {Object.entries(audienceRoles).map(([role, label]) => (
+                      <ChoicePill
+                        active={selectedAudienceRoles.includes(role as UserRole)}
+                        key={role}
+                        label={label}
+                        onPress={() => {
+                          const nextRole = role as UserRole;
+                          setSelectedAudienceRoles((current) =>
+                            current.includes(nextRole)
+                              ? current.filter((item) => item !== nextRole)
+                              : [...current, nextRole]
+                          );
+                        }}
+                      />
+                    ))}
+                  </View>
+                </>
+              ) : null}
+
+              <Text style={styles.label}>Video</Text>
+              <Pressable onPress={() => void pickVideo()} style={styles.filePicker}>
+                <Text style={styles.filePickerText}>
+                  {selectedVideo
+                    ? `${selectedVideo.name} · ${durationSeconds || 0}s${selectedVideo.fileSize ? ` · ${formatFileSize(selectedVideo.fileSize)}` : ''}`
+                    : 'Choose a video from your library'}
                 </Text>
-                <Text style={styles.metaText}>
-                  Audience: {targetSummary(short)}
-                  {short.audience_roles_csv ? ` · ${short.audience_roles_csv}` : ''}
-                </Text>
-                <Text style={styles.metaText}>
-                  {short.view_count || 0} views {short.has_viewed ? '· Viewed' : ''}
-                </Text>
-                <View style={styles.actionRow}>
-                  <ActionButton label="Play" onPress={() => void openShort(short)} tone="accent" />
-                  {short.can_manage ? (
-                    <ActionButton label="Delete" onPress={() => confirmDelete(short)} tone="danger" />
-                  ) : null}
-                </View>
-              </Panel>
-            ))
-          : null}
-      </ScrollView>
+              </Pressable>
+
+              <View style={styles.sheetActions}>
+                <ActionButton
+                  disabled={saving}
+                  label={saving ? 'Posting...' : 'Upload short'}
+                  onPress={() => void submitShort()}
+                  tone="accent"
+                />
+                {selectedVideo || title || caption ? (
+                  <ActionButton label="Reset" onPress={resetComposer} tone="navy" />
+                ) : null}
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
 
       <Modal animationType="slide" transparent visible={!!selectedShort} onRequestClose={() => setSelectedShort(null)}>
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>{selectedShort?.title?.trim() || 'Campus short'}</Text>
             <Text style={styles.modalMeta}>
-              {selectedShort?.author_name || 'Campus user'} · {selectedShort ? formatDateLabel(selectedShort.created_at) : ''}
+              {selectedShort?.author_name || 'Campus user'} ·{' '}
+              {selectedShort ? formatDateLabel(selectedShort.created_at) : ''}
             </Text>
             {selectedShort ? (
               <View style={styles.playerShell}>
                 <WebView
+                  allowsInlineMediaPlayback
+                  mediaPlaybackRequiresUserAction={false}
                   originWhitelist={['*']}
-                  source={{ html: videoHtml(shortVideoUrl(selectedShort.video_filename) || '') }}
+                  source={{
+                    html: videoHtml(shortVideoUrl(selectedShort.video_filename) || '', {
+                      autoplay: false,
+                      controls: true,
+                      loop: false,
+                      muted: false,
+                    }),
+                  }}
                   style={styles.player}
                 />
               </View>
@@ -684,14 +797,14 @@ export default function ShortsSection({ isActive, onDirty, refreshToken, session
                 <Text style={styles.helperText}>Audience: {targetSummary(selectedShort)}</Text>
               ) : null}
             </ScrollView>
-            <View style={styles.actionRow}>
+            <View style={styles.feedActionRow}>
               {selectedShort?.can_manage ? (
                 <ActionButton
                   label="Delete"
                   onPress={() => {
-                    const currentId = selectedShort.id;
+                    const short = selectedShort;
                     setSelectedShort(null);
-                    confirmDelete({ ...selectedShort, id: currentId });
+                    confirmDelete(short);
                   }}
                   tone="danger"
                 />
@@ -709,7 +822,7 @@ const styles = StyleSheet.create({
   actionButton: {
     alignItems: 'center',
     borderRadius: 999,
-    minWidth: 108,
+    minWidth: 110,
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
@@ -721,11 +834,44 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
   },
-  actionRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginTop: 14,
+  banner: {
+    backgroundColor: palette.dangerSoft,
+    borderBottomColor: '#f8c1cb',
+    borderBottomWidth: 1,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+  },
+  bannerText: {
+    color: palette.danger,
+    fontSize: 13,
+    fontWeight: '600',
+    lineHeight: 18,
+  },
+  closeButton: {
+    backgroundColor: '#eef4fb',
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  closeButtonText: {
+    color: palette.ink,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  container: {
+    backgroundColor: palette.bg,
+    flex: 1,
+  },
+  durationChip: {
+    backgroundColor: 'rgba(15, 123, 108, 0.88)',
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  durationChipText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '800',
   },
   emptyTitle: {
     color: palette.ink,
@@ -740,6 +886,87 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
   },
+  fab: {
+    alignItems: 'center',
+    alignSelf: 'flex-end',
+    backgroundColor: palette.warm,
+    borderRadius: 999,
+    elevation: 4,
+    justifyContent: 'center',
+    minHeight: 64,
+    minWidth: 64,
+    paddingHorizontal: 18,
+    position: 'absolute',
+    right: 18,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 14,
+  },
+  fabLabel: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '800',
+    marginTop: -2,
+  },
+  fabPlus: {
+    color: '#ffffff',
+    fontSize: 26,
+    fontWeight: '900',
+    lineHeight: 28,
+  },
+  feedActionRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 14,
+  },
+  feedBottom: {
+    bottom: 0,
+    left: 0,
+    padding: 18,
+    position: 'absolute',
+    right: 0,
+    zIndex: 2,
+  },
+  feedCaption: {
+    color: '#f3f7fb',
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 10,
+  },
+  feedCard: {
+    marginBottom: 18,
+  },
+  feedContent: {
+    paddingHorizontal: 16,
+  },
+  feedMeta: {
+    color: '#d0dceb',
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 6,
+  },
+  feedPlayer: {
+    backgroundColor: palette.navyDeep,
+    flex: 1,
+  },
+  feedTitle: {
+    color: '#ffffff',
+    fontSize: 24,
+    fontWeight: '900',
+    marginTop: 8,
+  },
+  feedTopRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    left: 16,
+    position: 'absolute',
+    right: 16,
+    top: 16,
+    zIndex: 2,
+  },
   filePicker: {
     backgroundColor: '#eef4fb',
     borderColor: palette.line,
@@ -753,11 +980,6 @@ const styles = StyleSheet.create({
     color: palette.ink,
     fontSize: 14,
     fontWeight: '600',
-  },
-  headline: {
-    color: palette.ink,
-    fontSize: 28,
-    fontWeight: '800',
   },
   helperText: {
     color: palette.muted,
@@ -779,12 +1001,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     marginTop: 12,
-  },
-  metaText: {
-    color: palette.muted,
-    fontSize: 13,
-    lineHeight: 19,
-    marginTop: 4,
   },
   modalBackdrop: {
     backgroundColor: 'rgba(7, 18, 28, 0.55)',
@@ -817,15 +1033,6 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '800',
   },
-  panel: {
-    backgroundColor: palette.card,
-    borderRadius: 24,
-    padding: 18,
-    shadowColor: '#10253c',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.06,
-    shadowRadius: 16,
-  },
   pill: {
     backgroundColor: '#eef4fb',
     borderColor: palette.line,
@@ -847,39 +1054,20 @@ const styles = StyleSheet.create({
     color: '#ffffff',
   },
   player: {
-    backgroundColor: '#08131f',
+    backgroundColor: palette.navyDeep,
     borderRadius: 20,
     overflow: 'hidden',
   },
   playerShell: {
-    backgroundColor: '#08131f',
+    backgroundColor: palette.navyDeep,
     borderRadius: 20,
     height: 260,
     marginTop: 14,
     overflow: 'hidden',
   },
-  previewBody: {
-    color: '#eaf3ff',
-    fontSize: 14,
-    lineHeight: 20,
-    marginTop: 10,
-  },
-  previewKicker: {
-    color: '#a9c2d8',
-    fontSize: 12,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-  },
-  previewTitle: {
-    color: '#ffffff',
-    fontSize: 20,
-    fontWeight: '800',
-    marginTop: 8,
-  },
   scopeNotice: {
     backgroundColor: palette.accentSoft,
     borderRadius: 18,
-    marginTop: 12,
     padding: 14,
   },
   scopeNoticeText: {
@@ -888,21 +1076,52 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     lineHeight: 19,
   },
-  screen: {
+  screenState: {
     backgroundColor: palette.bg,
-    gap: 16,
-    padding: 18,
-    paddingBottom: 42,
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 18,
   },
-  sectionTitle: {
+  sheet: {
+    backgroundColor: palette.card,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    maxHeight: '92%',
+    paddingHorizontal: 18,
+    paddingTop: 16,
+  },
+  sheetActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 16,
+  },
+  sheetBackdrop: {
+    backgroundColor: 'rgba(7, 18, 28, 0.4)',
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  sheetContent: {
+    paddingBottom: 8,
+  },
+  sheetHeader: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: 14,
+    justifyContent: 'space-between',
+    paddingBottom: 14,
+  },
+  sheetSubtitle: {
+    color: palette.muted,
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 6,
+    maxWidth: 250,
+  },
+  sheetTitle: {
     color: palette.ink,
-    fontSize: 18,
-    fontWeight: '800',
-  },
-  shortPreview: {
-    backgroundColor: palette.navy,
-    borderRadius: 22,
-    padding: 18,
+    fontSize: 22,
+    fontWeight: '900',
   },
   stateCard: {
     alignItems: 'center',
@@ -919,15 +1138,36 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     textAlign: 'center',
   },
-  subtitle: {
-    color: palette.muted,
-    fontSize: 15,
-    lineHeight: 22,
-    marginTop: 6,
-  },
   textArea: {
     minHeight: 110,
     textAlignVertical: 'top',
+  },
+  videoFallback: {
+    alignItems: 'center',
+    backgroundColor: palette.navyDeep,
+    flex: 1,
+    justifyContent: 'center',
+  },
+  videoFallbackText: {
+    color: '#d0dceb',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  videoFrame: {
+    backgroundColor: palette.navyDeep,
+    borderRadius: 30,
+    flex: 1,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  videoShade: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: palette.navySoft,
+  },
+  viewsText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '700',
   },
   wrapRow: {
     flexDirection: 'row',
