@@ -569,7 +569,8 @@ export default function ShortsSection({ isActive, onDirty, refreshToken, session
   };
 
   const permissions = response?.permissions;
-  const canPostShorts = Boolean(permissions?.can_post);
+  const isStudentViewer = session.role === 'student';
+  const canPostShorts = !isStudentViewer && Boolean(permissions?.can_post);
   const canReviewShorts = Boolean(permissions?.can_review);
   const feedIsSuperAdminOnly = Boolean(permissions?.feed_is_super_admin_only);
   const moderationSummary = response?.moderation_summary;
@@ -625,9 +626,11 @@ export default function ShortsSection({ isActive, onDirty, refreshToken, session
               <View style={styles.infoStack}>
                 {!canPostShorts ? (
                   <View style={styles.infoCard}>
-                    <Text style={styles.infoTitle}>Official shorts only</Text>
+                    <Text style={styles.infoTitle}>{isStudentViewer ? 'Student feed only' : 'Official shorts only'}</Text>
                     <Text style={styles.infoBody}>
-                      Only creators approved by a super administrator can upload shorts. Until then, your feed stays limited to official super-admin posts.
+                      {isStudentViewer
+                        ? 'Student accounts can watch shorts, but only super admins and authorized admins can upload them.'
+                        : 'Only creators approved by a super administrator can upload shorts. Until then, your feed stays limited to official super-admin posts.'}
                     </Text>
                   </View>
                 ) : null}

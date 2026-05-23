@@ -542,7 +542,7 @@ export function ManageUsersSection({ isActive, onDirty, refreshToken, session }:
       if (draft.user_id) {
         result = await updateManagedUser(session, {
           admin_type: draft.admin_type || null,
-          can_post_shorts: draft.can_post_shorts,
+          can_post_shorts: draft.role === 'admin' ? draft.can_post_shorts : false,
           department_id: draft.department_id,
           department_name: draft.department_id === null ? draft.department_name.trim() || null : null,
           email: draft.email.trim(),
@@ -558,7 +558,7 @@ export function ManageUsersSection({ isActive, onDirty, refreshToken, session }:
       } else {
         result = await createManagedUser(session, {
           admin_type: draft.admin_type || null,
-          can_post_shorts: draft.can_post_shorts,
+          can_post_shorts: draft.role === 'admin' ? draft.can_post_shorts : false,
           department_id: draft.department_id,
           department_name: draft.department_id === null ? draft.department_name.trim() || null : null,
           email: draft.email.trim(),
@@ -699,7 +699,7 @@ export function ManageUsersSection({ isActive, onDirty, refreshToken, session }:
             </View>
           </>
         ) : null}
-        {draft.role !== 'super_admin' ? (
+        {draft.role === 'admin' ? (
           <>
             <ToggleRow
               label="Authorize shorts posting"
@@ -848,7 +848,7 @@ export function ManageUsersSection({ isActive, onDirty, refreshToken, session }:
                   <Text style={[styles.badge, item.is_active ? styles.badgeAccent : styles.badgeMuted]}>
                     {item.is_active ? 'ACTIVE' : 'INACTIVE'}
                   </Text>
-                  {item.role !== 'super_admin' && item.can_post_shorts ? (
+                  {item.role === 'admin' && item.can_post_shorts ? (
                     <Text style={[styles.badge, styles.badgeWarm]}>SHORTS AUTHORIZED</Text>
                   ) : null}
                 </View>
@@ -860,7 +860,7 @@ export function ManageUsersSection({ isActive, onDirty, refreshToken, session }:
                 {item.department_name ? <Text style={styles.metaText}>Department: {item.department_name}</Text> : null}
                 {item.phone_number ? <Text style={styles.metaText}>Phone: {item.phone_number}</Text> : null}
                 {item.admin_type ? <Text style={styles.metaText}>Admin type: {item.admin_type}</Text> : null}
-                {item.role !== 'super_admin' && item.can_post_shorts ? (
+                {item.role === 'admin' && item.can_post_shorts ? (
                   <Text style={styles.metaText}>
                     Shorts posting approved{item.shorts_authorized_at ? ` · ${formatDateLabel(item.shorts_authorized_at)}` : ''}
                   </Text>
