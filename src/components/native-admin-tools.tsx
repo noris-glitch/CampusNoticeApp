@@ -56,6 +56,7 @@ interface BaseProps {
 
 interface UserDraft {
   admin_type: string;
+  can_post_shorts: boolean;
   department_id: number | null;
   department_name: string;
   email: string;
@@ -73,6 +74,7 @@ interface UserDraft {
 
 const emptyUserDraft: UserDraft = {
   admin_type: '',
+  can_post_shorts: false,
   department_id: null,
   department_name: '',
   email: '',
@@ -218,6 +220,7 @@ function formatUserDraft(source?: ManagedUserItem | null): UserDraft {
 
   return {
     admin_type: source.admin_type || '',
+    can_post_shorts: Boolean(source.can_post_shorts),
     department_id: source.department_id ?? null,
     department_name: source.department_name || '',
     email: source.email,
@@ -539,6 +542,7 @@ export function ManageUsersSection({ isActive, onDirty, refreshToken, session }:
       if (draft.user_id) {
         result = await updateManagedUser(session, {
           admin_type: draft.admin_type || null,
+          can_post_shorts: draft.can_post_shorts,
           department_id: draft.department_id,
           department_name: draft.department_id === null ? draft.department_name.trim() || null : null,
           email: draft.email.trim(),
@@ -554,6 +558,7 @@ export function ManageUsersSection({ isActive, onDirty, refreshToken, session }:
       } else {
         result = await createManagedUser(session, {
           admin_type: draft.admin_type || null,
+          can_post_shorts: draft.can_post_shorts,
           department_id: draft.department_id,
           department_name: draft.department_id === null ? draft.department_name.trim() || null : null,
           email: draft.email.trim(),
@@ -620,6 +625,12 @@ export function ManageUsersSection({ isActive, onDirty, refreshToken, session }:
           <MetricCard label="Students" value={response.stats.total_students} />
           <MetricCard label="Admins" value={response.stats.total_admins} />
           <MetricCard label="Active" value={response.stats.active_users} />
+          {response.stats.authorized_short_creators !== undefined ? (
+            <MetricCard
+              label="Short creators"
+              value={response.stats.authorized_short_creators}
+            />
+          ) : null}
         </View>
       ) : null}
 
@@ -686,6 +697,18 @@ export function ManageUsersSection({ isActive, onDirty, refreshToken, session }:
                 />
               ))}
             </View>
+          </>
+        ) : null}
+        {draft.role !== 'super_admin' ? (
+          <>
+            <ToggleRow
+              label="Authorize shorts posting"
+              onValueChange={(value) => setDraftField('can_post_shorts', value)}
+              value={draft.can_post_shorts}
+            />
+            <Text style={styles.helperText}>
+              Only super administrators can grant this. Authorized creators can upload shorts, and non-super-admin uploads still wait for review before they go live.
+            </Text>
           </>
         ) : null}
         <Text style={styles.label}>Faculty</Text>
@@ -825,6 +848,9 @@ export function ManageUsersSection({ isActive, onDirty, refreshToken, session }:
                   <Text style={[styles.badge, item.is_active ? styles.badgeAccent : styles.badgeMuted]}>
                     {item.is_active ? 'ACTIVE' : 'INACTIVE'}
                   </Text>
+                  {item.role !== 'super_admin' && item.can_post_shorts ? (
+                    <Text style={[styles.badge, styles.badgeWarm]}>SHORTS AUTHORIZED</Text>
+                  ) : null}
                 </View>
                 <Text style={styles.cardTitle}>{item.name}</Text>
                 <Text style={styles.metaText}>{item.email}</Text>
@@ -834,6 +860,11 @@ export function ManageUsersSection({ isActive, onDirty, refreshToken, session }:
                 {item.department_name ? <Text style={styles.metaText}>Department: {item.department_name}</Text> : null}
                 {item.phone_number ? <Text style={styles.metaText}>Phone: {item.phone_number}</Text> : null}
                 {item.admin_type ? <Text style={styles.metaText}>Admin type: {item.admin_type}</Text> : null}
+                {item.role !== 'super_admin' && item.can_post_shorts ? (
+                  <Text style={styles.metaText}>
+                    Shorts posting approved{item.shorts_authorized_at ? ` · ${formatDateLabel(item.shorts_authorized_at)}` : ''}
+                  </Text>
+                ) : null}
                 <Text style={styles.metaText}>Joined: {formatDateLabel(item.created_at)}</Text>
                 <View style={styles.buttonRow}>
                   <ActionButton

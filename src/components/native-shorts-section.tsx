@@ -220,12 +220,14 @@ export default function ShortsSection({ isActive, onDirty, refreshToken, session
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [composerVisible, setComposerVisible] = useState(false);
+  const [reviewVisible, setReviewVisible] = useState(false);
   const [title, setTitle] = useState('');
   const [caption, setCaption] = useState('');
   const [selectedVideo, setSelectedVideo] = useState<UploadAsset | null>(null);
   const [durationSeconds, setDurationSeconds] = useState<number | null>(null);
   const [selectedShort, setSelectedShort] = useState<ShortItem | null>(null);
   const [activeShortId, setActiveShortId] = useState<number | null>(null);
+  const [moderatingShortId, setModeratingShortId] = useState<number | null>(null);
   const [facultyTarget, setFacultyTarget] = useState<number | null>(
     session.role === 'admin' ? session.faculty_id || null : null
   );
@@ -310,6 +312,24 @@ export default function ShortsSection({ isActive, onDirty, refreshToken, session
     }
   }, [departmentTarget, visibleDepartments]);
 
+  useEffect(() => {
+    if (composerVisible && response?.permissions && !response.permissions.can_post) {
+      setComposerVisible(false);
+    }
+  }, [composerVisible, response?.permissions]);
+
+  useEffect(() => {
+    if (reviewVisible && response?.permissions && !response.permissions.can_review) {
+      setReviewVisible(false);
+    }
+  }, [reviewVisible, response?.permissions]);
+
+  useEffect(() => {
+    if (reviewVisible && (response?.pending_shorts?.length || 0) === 0) {
+      setReviewVisible(false);
+    }
+  }, [reviewVisible, response?.pending_shorts]);
+
   const refreshShorts = async () => {
     setRefreshing(true);
     setError(null);
@@ -388,7 +408,27 @@ export default function ShortsSection({ isActive, onDirty, refreshToken, session
     }
   };
 
+  const openComposer = () => {
+    if (!response?.permissions?.can_post) {
+      Alert.alert(
+        'Shorts',
+        'Only creators authorized by a super administrator can upload shorts from the app.'
+      );
+      return;
+    }
+
+    setComposerVisible(true);
+  };
+
   const submitShort = async () => {
+    if (!response?.permissions?.can_post) {
+      Alert.alert(
+        'Shorts',
+        'Your account is not authorized to upload shorts yet. Please contact a super administrator.'
+      );
+      return;
+    }
+
     if (!selectedVideo || !durationSeconds) {
       Alert.alert('Shorts', 'Choose a video before posting.');
       return;
@@ -486,10 +526,63 @@ export default function ShortsSection({ isActive, onDirty, refreshToken, session
     }
   };
 
+  const moderateShort = async (short: ShortItem, action: 'approve' | 'reject') => {
+    setModeratingShortId(short.id);
+    try {
+      const result = await runShortAction(session, {
+        action,
+        short_id: short.id,
+      });
+      Alert.alert('Shorts', result.message || (action === 'approve' ? 'Short approved.' : 'Short rejected.'));
+      setSelectedShort((current) => (current?.id === short.id ? null : current));
+      onDirty();
+      const refreshed = await fetchShorts(session);
+      applyResponse(refreshed);
+    } catch (moderateError) {
+      Alert.alert(
+        'Shorts',
+        getApiErrorMessage(
+          moderateError,
+          action === 'approve' ? 'Could not approve that short.' : 'Could not reject that short.'
+        )
+      );
+    } finally {
+      setModeratingShortId(null);
+    }
+  };
+
+  const confirmModeration = (short: ShortItem, action: 'approve' | 'reject') => {
+    Alert.alert(
+      action === 'approve' ? 'Approve short' : 'Reject short',
+      action === 'approve'
+        ? 'This short will become visible to its full target audience.'
+        : 'This short will be removed from the pending review queue.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: action === 'approve' ? 'Approve' : 'Reject',
+          style: action === 'approve' ? 'default' : 'destructive',
+          onPress: () => void moderateShort(short, action),
+        },
+      ]
+    );
+  };
+
+  const permissions = response?.permissions;
+  const canPostShorts = Boolean(permissions?.can_post);
+  const canReviewShorts = Boolean(permissions?.can_review);
+  const feedIsSuperAdminOnly = Boolean(permissions?.feed_is_super_admin_only);
+  const moderationSummary = response?.moderation_summary;
+  const pendingShorts = response?.pending_shorts || [];
   const scopeLocked = response?.student_scope_locked || session.role === 'student';
   const audienceRoles = response?.audience_roles || {};
   const years = response?.years || [];
   const shorts = response?.shorts || [];
+  const emptyFeedMessage = feedIsSuperAdminOnly
+    ? 'Only official shorts from the super admin are available to you right now.'
+    : 'When someone posts a campus short for your audience, it will show up here.';
+  const reviewerPendingCount = moderationSummary?.pending_review ?? pendingShorts.length;
+  const shouldShowPendingReviewNote = canPostShorts && session.role !== 'super_admin';
 
   if (loading && !response) {
     return (
@@ -527,10 +620,51 @@ export default function ShortsSection({ isActive, onDirty, refreshToken, session
           data={shorts}
           decelerationRate="fast"
           keyExtractor={(item) => item.id.toString()}
+          ListHeaderComponent={
+            !canPostShorts || shouldShowPendingReviewNote || canReviewShorts ? (
+              <View style={styles.infoStack}>
+                {!canPostShorts ? (
+                  <View style={styles.infoCard}>
+                    <Text style={styles.infoTitle}>Official shorts only</Text>
+                    <Text style={styles.infoBody}>
+                      Only creators approved by a super administrator can upload shorts. Until then, your feed stays limited to official super-admin posts.
+                    </Text>
+                  </View>
+                ) : null}
+
+                {shouldShowPendingReviewNote ? (
+                  <View style={[styles.infoCard, styles.infoCardAccent]}>
+                    <Text style={styles.infoTitle}>Uploads need review</Text>
+                    <Text style={styles.infoBody}>
+                      Your account is cleared to post, but non-super-admin shorts still wait for approval before the full audience can see them.
+                    </Text>
+                  </View>
+                ) : null}
+
+                {canReviewShorts ? (
+                  <View style={[styles.infoCard, styles.infoCardWarm]}>
+                    <Text style={styles.infoTitle}>Review queue</Text>
+                    <Text style={styles.infoBody}>
+                      {reviewerPendingCount} pending · {moderationSummary?.published || 0} published ·{' '}
+                      {moderationSummary?.rejected || 0} rejected
+                    </Text>
+                    <View style={styles.infoActionRow}>
+                      <ActionButton
+                        label={pendingShorts.length > 0 ? `Review pending (${pendingShorts.length})` : 'No pending shorts'}
+                        onPress={() => setReviewVisible(true)}
+                        tone="navy"
+                        disabled={pendingShorts.length === 0}
+                      />
+                    </View>
+                  </View>
+                ) : null}
+              </View>
+            ) : null
+          }
           ListEmptyComponent={
             <EmptyState
               title="No shorts yet"
-              body="When someone posts a campus short for your audience, it will show up here."
+              body={emptyFeedMessage}
             />
           }
           onRefresh={() => void refreshShorts()}
@@ -587,9 +721,24 @@ export default function ShortsSection({ isActive, onDirty, refreshToken, session
                     <Text numberOfLines={2} style={styles.feedMeta}>
                       Audience: {targetSummary(item)}
                     </Text>
+                    {item.status && item.status !== 'published' ? (
+                      <Text numberOfLines={1} style={styles.feedStatus}>
+                        Status: {item.status.replace(/_/g, ' ')}
+                      </Text>
+                    ) : null}
 
                     <View style={styles.feedActionRow}>
                       <ActionButton label="Watch" onPress={() => void openShort(item)} tone="accent" />
+                      {item.can_review && item.status === 'pending_review' ? (
+                        <ActionButton
+                          label="Review"
+                          onPress={() => {
+                            setReviewVisible(false);
+                            void openShort(item);
+                          }}
+                          tone="warm"
+                        />
+                      ) : null}
                       {item.can_manage ? (
                         <ActionButton label="Delete" onPress={() => confirmDelete(item)} tone="danger" />
                       ) : null}
@@ -604,13 +753,15 @@ export default function ShortsSection({ isActive, onDirty, refreshToken, session
           viewabilityConfigCallbackPairs={viewabilityConfigCallbackPairs.current as any}
         />
 
-        <Pressable
-          onPress={() => setComposerVisible(true)}
-          style={[styles.fab, { bottom: 22 + insets.bottom }]}
-        >
-          <Text style={styles.fabPlus}>+</Text>
-          <Text style={styles.fabLabel}>Post</Text>
-        </Pressable>
+        {canPostShorts ? (
+          <Pressable
+            onPress={openComposer}
+            style={[styles.fab, { bottom: 22 + insets.bottom }]}
+          >
+            <Text style={styles.fabPlus}>+</Text>
+            <Text style={styles.fabLabel}>Post</Text>
+          </Pressable>
+        ) : null}
       </View>
 
       <Modal
@@ -765,6 +916,67 @@ export default function ShortsSection({ isActive, onDirty, refreshToken, session
         </View>
       </Modal>
 
+      <Modal animationType="slide" transparent visible={reviewVisible} onRequestClose={() => setReviewVisible(false)}>
+        <View style={styles.sheetBackdrop}>
+          <View style={[styles.sheet, { paddingBottom: 18 + insets.bottom }]}>
+            <View style={styles.sheetHeader}>
+              <View>
+                <Text style={styles.sheetTitle}>Review pending shorts</Text>
+                <Text style={styles.sheetSubtitle}>
+                  Approve or reject uploads before they reach their full audience.
+                </Text>
+              </View>
+              <Pressable onPress={() => setReviewVisible(false)} style={styles.closeButton}>
+                <Text style={styles.closeButtonText}>Close</Text>
+              </Pressable>
+            </View>
+
+            <ScrollView contentContainerStyle={styles.sheetContent} showsVerticalScrollIndicator={false}>
+              {pendingShorts.length === 0 ? (
+                <EmptyState title="Nothing waiting" body="There are no shorts waiting for review right now." />
+              ) : (
+                pendingShorts.map((short) => (
+                  <View key={short.id} style={styles.reviewCard}>
+                    <View style={styles.inlineBadgeRow}>
+                      <Text style={styles.reviewBadge}>PENDING</Text>
+                      {short.department_name ? <Text style={styles.reviewBadge}>{short.department_name}</Text> : null}
+                    </View>
+                    <Text style={styles.reviewTitle}>{short.title?.trim() || 'Campus short'}</Text>
+                    <Text style={styles.reviewMeta}>
+                      {short.author_name || 'Campus user'} · {formatDateLabel(short.created_at)}
+                    </Text>
+                    <Text style={styles.reviewBody}>{short.caption}</Text>
+                    <Text style={styles.reviewMeta}>Audience: {targetSummary(short)}</Text>
+                    <View style={styles.reviewActionRow}>
+                      <ActionButton
+                        label="Preview"
+                        onPress={() => {
+                          setReviewVisible(false);
+                          void openShort(short);
+                        }}
+                        tone="navy"
+                      />
+                      <ActionButton
+                        disabled={moderatingShortId === short.id}
+                        label={moderatingShortId === short.id ? 'Approving...' : 'Approve'}
+                        onPress={() => confirmModeration(short, 'approve')}
+                        tone="accent"
+                      />
+                      <ActionButton
+                        disabled={moderatingShortId === short.id}
+                        label={moderatingShortId === short.id ? 'Working...' : 'Reject'}
+                        onPress={() => confirmModeration(short, 'reject')}
+                        tone="danger"
+                      />
+                    </View>
+                  </View>
+                ))
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
       <Modal animationType="slide" transparent visible={!!selectedShort} onRequestClose={() => setSelectedShort(null)}>
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
@@ -796,8 +1008,27 @@ export default function ShortsSection({ isActive, onDirty, refreshToken, session
               {selectedShort ? (
                 <Text style={styles.helperText}>Audience: {targetSummary(selectedShort)}</Text>
               ) : null}
+              {selectedShort?.status && selectedShort.status !== 'published' ? (
+                <Text style={styles.helperText}>Status: {selectedShort.status.replace(/_/g, ' ')}</Text>
+              ) : null}
             </ScrollView>
             <View style={styles.feedActionRow}>
+              {selectedShort?.can_review && selectedShort.status === 'pending_review' ? (
+                <>
+                  <ActionButton
+                    disabled={moderatingShortId === selectedShort.id}
+                    label={moderatingShortId === selectedShort.id ? 'Approving...' : 'Approve'}
+                    onPress={() => confirmModeration(selectedShort, 'approve')}
+                    tone="accent"
+                  />
+                  <ActionButton
+                    disabled={moderatingShortId === selectedShort.id}
+                    label={moderatingShortId === selectedShort.id ? 'Working...' : 'Reject'}
+                    onPress={() => confirmModeration(selectedShort, 'reject')}
+                    tone="danger"
+                  />
+                </>
+              ) : null}
               {selectedShort?.can_manage ? (
                 <ActionButton
                   label="Delete"
@@ -915,6 +1146,12 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     lineHeight: 28,
   },
+  feedStatus: {
+    color: '#ffe3a6',
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: 6,
+  },
   feedActionRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -985,6 +1222,42 @@ const styles = StyleSheet.create({
     color: palette.muted,
     fontSize: 13,
     lineHeight: 19,
+  },
+  infoActionRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 14,
+  },
+  infoBody: {
+    color: palette.ink,
+    fontSize: 14,
+    lineHeight: 21,
+    marginTop: 8,
+  },
+  infoCard: {
+    backgroundColor: palette.card,
+    borderColor: palette.line,
+    borderRadius: 24,
+    borderWidth: 1,
+    padding: 18,
+  },
+  infoCardAccent: {
+    backgroundColor: palette.accentSoft,
+    borderColor: '#b9eadf',
+  },
+  infoCardWarm: {
+    backgroundColor: '#fff4eb',
+    borderColor: '#ffd4bf',
+  },
+  infoStack: {
+    gap: 12,
+    marginBottom: 18,
+  },
+  infoTitle: {
+    color: palette.ink,
+    fontSize: 17,
+    fontWeight: '800',
   },
   input: {
     backgroundColor: '#f9fbfd',
@@ -1137,6 +1410,51 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     textAlign: 'center',
+  },
+  inlineBadgeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  reviewActionRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 14,
+  },
+  reviewBadge: {
+    backgroundColor: '#edf3f9',
+    borderRadius: 999,
+    color: palette.ink,
+    fontSize: 11,
+    fontWeight: '800',
+    overflow: 'hidden',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  reviewBody: {
+    color: palette.ink,
+    fontSize: 14,
+    lineHeight: 21,
+    marginTop: 10,
+  },
+  reviewCard: {
+    backgroundColor: '#eef4fb',
+    borderRadius: 24,
+    marginTop: 12,
+    padding: 16,
+  },
+  reviewMeta: {
+    color: palette.muted,
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 6,
+  },
+  reviewTitle: {
+    color: palette.ink,
+    fontSize: 18,
+    fontWeight: '800',
+    marginTop: 10,
   },
   textArea: {
     minHeight: 110,

@@ -172,10 +172,12 @@ export interface NoticeDetailResponse {
 }
 
 export interface ShortItem {
+  approval_status?: string | null;
   audience_roles_csv?: string | null;
   author_name?: string | null;
   author_role?: UserRole | null;
   can_manage?: number;
+  can_review?: number;
   caption: string;
   created_at: string;
   department_id?: number | null;
@@ -391,6 +393,7 @@ export interface EmergencyAlertsResponse {
 
 export interface ManagedUserItem {
   admin_type?: string | null;
+  can_post_shorts?: number;
   created_at: string;
   department_id?: number | null;
   department_name?: string | null;
@@ -403,6 +406,8 @@ export interface ManagedUserItem {
   name: string;
   phone_number?: string | null;
   role: UserRole;
+  shorts_authorized_at?: string | null;
+  shorts_authorized_by?: number | null;
   student_id?: string | null;
   year?: number | null;
 }
@@ -413,6 +418,7 @@ export interface ManageUsersResponse {
   faculties: FacultyOption[];
   stats: {
     active_users: number;
+    authorized_short_creators?: number;
     students_missing_departments?: number;
     students_missing_phone_numbers?: number;
     total_admins: number;
@@ -454,6 +460,17 @@ export interface ShortsResponse {
   audience_roles: Record<string, string>;
   departments: DepartmentOption[];
   faculties: FacultyOption[];
+  moderation_summary?: {
+    pending_review: number;
+    published: number;
+    rejected: number;
+  };
+  pending_shorts?: ShortItem[];
+  permissions?: {
+    can_post: number;
+    can_review: number;
+    feed_is_super_admin_only: number;
+  };
   shorts: ShortItem[];
   student_scope_locked?: boolean;
   success: boolean;
@@ -1146,6 +1163,7 @@ export async function createManagedUser(
   user: StoredUser,
   payload: {
     admin_type?: string | null;
+    can_post_shorts?: boolean;
     department_id?: number | null;
     department_name?: string | null;
     email: string;
@@ -1170,6 +1188,7 @@ export async function updateManagedUser(
   user: StoredUser,
   payload: {
     admin_type?: string | null;
+    can_post_shorts?: boolean;
     department_id?: number | null;
     department_name?: string | null;
     email: string;
@@ -1244,7 +1263,8 @@ export async function createShort(
 export async function runShortAction(
   user: StoredUser,
   payload: {
-    action: 'delete' | 'view';
+    action: 'approve' | 'delete' | 'reject' | 'view';
+    review_notes?: string;
     short_id: number;
   }
 ): Promise<SimpleSuccessResponse> {
