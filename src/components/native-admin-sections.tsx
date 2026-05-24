@@ -265,13 +265,15 @@ export function CreateNoticeSection({
   session,
 }: CreateNoticeSectionProps) {
   const isLocationOnly = mode === 'location';
+  const defaultCategory = isLocationOnly ? 'Event' : 'Academic';
+  const defaultFacultyTarget = session.role === 'admin' ? session.faculty_id || null : null;
   const [metadata, setMetadata] = useState<Awaited<ReturnType<typeof fetchAdminNotices>> | null>(null);
   const [saving, setSaving] = useState(false);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
-  const [category, setCategory] = useState(isLocationOnly ? 'Event' : 'Academic');
+  const [category, setCategory] = useState(defaultCategory);
   const [priority, setPriority] = useState('normal');
-  const [facultyTarget, setFacultyTarget] = useState<number | null>(session.role === 'admin' ? session.faculty_id || null : null);
+  const [facultyTarget, setFacultyTarget] = useState<number | null>(defaultFacultyTarget);
   const [departmentTarget, setDepartmentTarget] = useState<number | null>(null);
   const [yearTarget, setYearTarget] = useState<number | null>(null);
   const [selectedAudienceRoles, setSelectedAudienceRoles] = useState<Array<'student' | 'admin' | 'super_admin'>>([]);
@@ -413,6 +415,38 @@ export function CreateNoticeSection({
     }
   };
 
+  const resetNoticeForm = () => {
+    setTitle('');
+    setContent('');
+    setCategory(defaultCategory);
+    setPriority('normal');
+    setFacultyTarget(defaultFacultyTarget);
+    setDepartmentTarget(null);
+    setYearTarget(null);
+    setSelectedAudienceRoles([]);
+    setScheduleDate('');
+    setExpireDate('');
+    setAckDate('');
+    setPinned(false);
+    setRequiresAck(false);
+    setInAppChannel(true);
+    setEmailChannel(false);
+    setSmsChannel(false);
+    setSaveAsTemplate(false);
+    setTemplateName('');
+    setRecurringTemplate(false);
+    setRecurrencePattern('');
+    setAttachment(null);
+    setLocationEnabled(isLocationOnly);
+    setLatitude('');
+    setLongitude('');
+    setLocationName('');
+    setLocationAddress('');
+    setRadiusKm('1');
+    setEventDate('');
+    setEventEndDate('');
+  };
+
   const submitNotice = async (submissionAction: 'publish' | 'save_draft' | 'submit') => {
     setSaving(true);
     try {
@@ -452,30 +486,7 @@ export function CreateNoticeSection({
       });
 
       Alert.alert('Notice', response.message || 'Notice saved successfully.');
-      setTitle('');
-      setContent('');
-      setScheduleDate('');
-      setExpireDate('');
-      setAckDate('');
-      setPinned(false);
-      setRequiresAck(false);
-      setEmailChannel(false);
-      setSmsChannel(false);
-      setDepartmentTarget(null);
-      setSelectedAudienceRoles([]);
-      setSaveAsTemplate(false);
-      setTemplateName('');
-      setRecurringTemplate(false);
-      setRecurrencePattern('');
-      setAttachment(null);
-      setLocationEnabled(isLocationOnly);
-      setLatitude('');
-      setLongitude('');
-      setLocationName('');
-      setLocationAddress('');
-      setRadiusKm('1');
-      setEventDate('');
-      setEventEndDate('');
+      resetNoticeForm();
       onDirty();
     } catch (saveError) {
       Alert.alert('Notice', getApiErrorMessage(saveError, 'Could not save this notice.'));
@@ -514,7 +525,14 @@ export function CreateNoticeSection({
         </View>
         <Text style={styles.label}>Target faculty</Text>
         <View style={styles.wrapRow}>
-          <ChoicePill active={facultyTarget === null} label="All faculties" onPress={() => setFacultyTarget(null)} />
+          <ChoicePill
+            active={facultyTarget === null}
+            label="All faculties"
+            onPress={() => {
+              setFacultyTarget(null);
+              setDepartmentTarget(null);
+            }}
+          />
           {(metadata?.faculties || []).map((faculty) => (
             <ChoicePill
               key={faculty.id}

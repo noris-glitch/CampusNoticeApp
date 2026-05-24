@@ -7,6 +7,7 @@ import {
   Image,
   Modal,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Switch,
@@ -121,11 +122,15 @@ function EmptyState({ body, title }: { body: string; title: string }) {
 }
 
 function MetricCard({
+  active = false,
   label,
+  onPress,
   tone,
   value,
 }: {
+  active?: boolean;
   label: string;
+  onPress?: () => void;
   tone: 'accent' | 'danger' | 'gold' | 'warm';
   value: number;
 }) {
@@ -136,12 +141,24 @@ function MetricCard({
     warm: palette.warmSoft,
   };
 
-  return (
-    <View style={[styles.metricCard, { backgroundColor: backgrounds[tone] }]}>
+  const content = (
+    <View
+      style={[
+        styles.metricCard,
+        { backgroundColor: backgrounds[tone] },
+        active ? styles.metricCardActive : null,
+      ]}
+    >
       <Text style={styles.metricValue}>{value}</Text>
       <Text style={styles.metricLabel}>{label}</Text>
     </View>
   );
+
+  if (!onPress) {
+    return content;
+  }
+
+  return <Pressable onPress={onPress}>{content}</Pressable>;
 }
 
 function Badge({ label, tone }: { label: string; tone: 'accent' | 'danger' | 'gold' | 'warm' }) {
@@ -566,11 +583,35 @@ export function StudentFeedSection({
 }: NoticeListProps & { summary?: StudentDashboardData | null }) {
   const [notices, setNotices] = useState<NoticeItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [selectedNotice, setSelectedNotice] = useState<NoticeDetailResponse | null>(null);
+  const [quickFilter, setQuickFilter] = useState<'all' | 'saved' | 'unread' | 'urgent'>('all');
   const deferredSearch = useDeferredValue(search.trim().toLowerCase());
+
+  const loadFeed = async (mode: 'initial' | 'refresh' = 'initial') => {
+    if (mode === 'refresh') {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
+    setError(null);
+
+    try {
+      const feed = await fetchNotices(session);
+      setNotices(feed);
+    } catch (loadError) {
+      setError(getApiErrorMessage(loadError, 'Could not load notices right now.'));
+    } finally {
+      if (mode === 'refresh') {
+        setRefreshing(false);
+      } else {
+        setLoading(false);
+      }
+    }
+  };
 
   useEffect(() => {
     if (!isActive) {
@@ -579,9 +620,6 @@ export function StudentFeedSection({
 
     let isMounted = true;
     async function load() {
-      setLoading(true);
-      setError(null);
-
       try {
         const feed = await fetchNotices(session);
         if (isMounted) {
@@ -615,6 +653,26 @@ export function StudentFeedSection({
 
     return matchesSearch && matchesCategory;
   });
+
+  const quickFiltered = filtered.filter((notice) => {
+    switch (quickFilter) {
+      case 'saved':
+        return Boolean(notice.is_bookmarked);
+      case 'unread':
+        return !Boolean(notice.has_viewed);
+      case 'urgent':
+        return (
+          ['high', 'critical'].includes((notice.priority || '').toLowerCase()) ||
+          Boolean(notice.requires_acknowledgement)
+        );
+      default:
+        return true;
+    }
+  });
+
+  const toggleQuickFilter = (next: 'saved' | 'unread' | 'urgent') => {
+    setQuickFilter((current) => (current === next ? 'all' : next));
+  };
 
   const openNotice = async (notice: NoticeItem) => {
     setSelectedNotice(fallbackNoticeDetail(notice));
@@ -670,7 +728,17 @@ export function StudentFeedSection({
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.sectionContent}>
+    <ScrollView
+      contentContainerStyle={styles.sectionContent}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          colors={[palette.accent]}
+          tintColor={palette.accent}
+          onRefresh={() => void loadFeed('refresh')}
+        />
+      }
+    >
       <SectionIntro
         title="Notice feed"
         subtitle="The latest campus updates for your faculty, year, and subscriptions."
@@ -678,10 +746,36 @@ export function StudentFeedSection({
 
       {summary ? (
         <View style={styles.metricRow}>
-          <MetricCard label="Unread" tone="gold" value={summary.unread_count} />
-          <MetricCard label="Urgent" tone="danger" value={summary.urgent_count} />
-          <MetricCard label="Saved" tone="accent" value={summary.bookmark_count} />
+          <MetricCard
+            active={quickFilter === 'unread'}
+            label="Unread"
+            onPress={() => toggleQuickFilter('unread')}
+            tone="gold"
+            value={summary.unread_count}
+          />
+          <MetricCard
+            active={quickFilter === 'urgent'}
+            label="Urgent"
+            onPress={() => toggleQuickFilter('urgent')}
+            tone="danger"
+            value={summary.urgent_count}
+          />
+          <MetricCard
+            active={quickFilter === 'saved'}
+            label="Saved"
+            onPress={() => toggleQuickFilter('saved')}
+            tone="accent"
+            value={summary.bookmark_count}
+          />
         </View>
+      ) : null}
+      <Text style={styles.helperText}>
+        Tap Unread, Urgent, or Saved to filter the feed, or pull down to refresh for newly published notices.
+      </Text>
+      {quickFilter !== 'all' ? (
+        <Pressable onPress={() => setQuickFilter('all')} style={styles.inlineFilterReset}>
+          <Text style={styles.inlineFilterResetText}>Clear quick filter</Text>
+        </Pressable>
       ) : null}
 
       <Panel>
@@ -707,14 +801,18 @@ export function StudentFeedSection({
 
       {loading ? <LoadingState label="Loading your feed..." /> : null}
       {error ? <ErrorState message={error} /> : null}
-      {!loading && !error && filtered.length === 0 ? (
+      {!loading && !error && quickFiltered.length === 0 ? (
         <EmptyState
-          body="Try a different search term or category."
+          body={
+            quickFilter === 'all'
+              ? 'Try a different search term or category.'
+              : 'Try a different search term, category, or clear the quick filter.'
+          }
           title="No notices matched your filters"
         />
       ) : null}
 
-      {filtered.map((notice) => (
+      {quickFiltered.map((notice) => (
         <NoticeCard
           key={notice.id}
           notice={notice}
@@ -1781,6 +1879,20 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginTop: 8,
   },
+  inlineFilterReset: {
+    alignSelf: 'flex-start',
+    backgroundColor: palette.card,
+    borderColor: palette.line,
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  inlineFilterResetText: {
+    color: palette.navy,
+    fontSize: 12,
+    fontWeight: '700',
+  },
   inlineRowWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -1813,6 +1925,10 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 96,
     padding: 16,
+  },
+  metricCardActive: {
+    borderColor: palette.navy,
+    borderWidth: 2,
   },
   metricLabel: {
     color: palette.ink,
