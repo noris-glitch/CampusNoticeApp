@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  ImageBackground,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -14,7 +15,9 @@ import {
 import { Href, useLocalSearchParams, useRouter } from 'expo-router';
 
 import {
+  fetchPublicSettings,
   getApiErrorMessage,
+  landingBackgroundUrl,
   loadSession,
   loginWithPassword,
   saveSession,
@@ -40,6 +43,8 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
+  const [backgroundColor, setBackgroundColor] = useState('#17324D');
+  const [backgroundImageUrl, setBackgroundImageUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof params.email === 'string' && params.email.trim() !== '') {
@@ -69,6 +74,32 @@ export default function LoginScreen() {
       isMounted = false;
     };
   }, [router]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadPublicSettings() {
+      try {
+        const response = await fetchPublicSettings();
+        if (!isMounted) {
+          return;
+        }
+
+        setBackgroundColor(response.landing_page.background_color || '#17324D');
+        setBackgroundImageUrl(landingBackgroundUrl(response.landing_page.background_image_url) || null);
+      } catch {
+        if (isMounted) {
+          setBackgroundColor('#17324D');
+          setBackgroundImageUrl(null);
+        }
+      }
+    }
+
+    void loadPublicSettings();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
@@ -100,16 +131,16 @@ export default function LoginScreen() {
     );
   }
 
-  return (
+  const authContent = (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={styles.screen}
     >
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <View style={styles.hero}>
-          <Text style={styles.kicker}>JOOUST Campus Notice</Text>
-          <Text style={styles.title}>Sign in to your campus workspace.</Text>
-          <Text style={styles.subtitle}>
+          <Text style={[styles.kicker, styles.heroTextOnMedia]}>JOOUST Campus Notice</Text>
+          <Text style={[styles.title, styles.heroTextOnMedia]}>Sign in to your campus workspace.</Text>
+          <Text style={[styles.subtitle, styles.heroSubtextOnMedia]}>
             Students can create accounts here, while admins and super admins can sign in with existing credentials.
           </Text>
         </View>
@@ -179,6 +210,18 @@ export default function LoginScreen() {
       </ScrollView>
     </KeyboardAvoidingView>
   );
+
+  return (
+    <View style={[styles.screenShell, { backgroundColor }]}>
+      {backgroundImageUrl ? (
+        <ImageBackground source={{ uri: backgroundImageUrl }} style={styles.backgroundImage} imageStyle={styles.backgroundImageLayer}>
+          <View style={styles.backgroundOverlay}>{authContent}</View>
+        </ImageBackground>
+      ) : (
+        authContent
+      )}
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -224,6 +267,12 @@ const styles = StyleSheet.create({
   hero: {
     marginBottom: 24,
     width: '100%',
+  },
+  heroSubtextOnMedia: {
+    color: 'rgba(255,255,255,0.88)',
+  },
+  heroTextOnMedia: {
+    color: '#ffffff',
   },
   inlineLink: {
     alignSelf: 'flex-end',
@@ -305,8 +354,21 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '800',
   },
+  backgroundImage: {
+    flex: 1,
+  },
+  backgroundImageLayer: {
+    opacity: 0.92,
+  },
+  backgroundOverlay: {
+    backgroundColor: 'rgba(9, 20, 33, 0.62)',
+    flex: 1,
+  },
   screen: {
-    backgroundColor: colors.page,
+    backgroundColor: 'transparent',
+    flex: 1,
+  },
+  screenShell: {
     flex: 1,
   },
   scrollContent: {

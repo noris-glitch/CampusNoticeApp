@@ -33,6 +33,7 @@ function ensureApiObject<T>(value: unknown, fallback: string): T {
 
 export const API_PATHS = {
   warmup: '/login.php',
+  publicSettings: '/ajax/api/public_settings.php',
   login: '/ajax/api/login.php',
   register: '/ajax/api/register.php',
   passwordReset: '/ajax/api/password_reset.php',
@@ -93,6 +94,12 @@ export interface DepartmentOption {
   faculty_name?: string | null;
   id: number;
   name: string;
+}
+
+export interface LandingPageSettings {
+  background_color: string;
+  background_image?: string | null;
+  background_image_url?: string | null;
 }
 
 export interface YearOption {
@@ -416,12 +423,15 @@ export interface ManageUsersResponse {
   admin_types: Record<string, string>;
   departments: DepartmentOption[];
   faculties: FacultyOption[];
+  landing_page: LandingPageSettings;
   stats: {
     active_users: number;
     authorized_short_creators?: number;
     students_missing_departments?: number;
     students_missing_phone_numbers?: number;
     total_admins: number;
+    total_departments?: number;
+    total_faculties?: number;
     total_students: number;
     total_super_admins: number;
     total_users: number;
@@ -429,6 +439,11 @@ export interface ManageUsersResponse {
   success: boolean;
   users: ManagedUserItem[];
   years: YearOption[];
+}
+
+export interface PublicSettingsResponse {
+  landing_page: LandingPageSettings;
+  success: boolean;
 }
 
 export interface StudentSyncResponse {
@@ -711,6 +726,22 @@ export function webUrl(path: string): string {
   return `${WEB_BASE_URL}${path}`;
 }
 
+export function assetUrl(path?: string | null): string | null {
+  if (!path) {
+    return null;
+  }
+
+  if (/^https?:\/\//i.test(path)) {
+    return path;
+  }
+
+  if (path.startsWith('/')) {
+    return `${API_BASE_URL}${path}`;
+  }
+
+  return `${API_BASE_URL}/${path.replace(/^\/+/, '')}`;
+}
+
 export function noticeAttachmentUrl(attachment?: string | null): string | null {
   if (!attachment) {
     return null;
@@ -743,11 +774,19 @@ export function profilePictureUrl(profilePicture?: string | null): string | null
   return `${API_BASE_URL}/assets/uploads/profiles/${profilePicture}`;
 }
 
+export function landingBackgroundUrl(backgroundImageUrl?: string | null): string | null {
+  return assetUrl(backgroundImageUrl);
+}
+
 export async function warmUpServer(): Promise<void> {
   await apiClient.get(API_PATHS.warmup, {
     responseType: 'text',
     timeout: 15000,
   });
+}
+
+export async function fetchPublicSettings(): Promise<PublicSettingsResponse> {
+  return getRequest<PublicSettingsResponse>(API_PATHS.publicSettings);
 }
 
 export async function saveSession(user: StoredUser): Promise<void> {
@@ -1214,6 +1253,81 @@ export async function deleteManagedUser(user: StoredUser, userId: number): Promi
     ...authParams(user),
     action: 'delete',
     user_id: userId,
+  });
+}
+
+export async function createFaculty(
+  user: StoredUser,
+  payload: { dean_name?: string | null; name: string }
+): Promise<SimpleSuccessResponse> {
+  return postRequest<SimpleSuccessResponse>(API_PATHS.manageUsers, {
+    ...authParams(user),
+    ...payload,
+    action: 'create_faculty',
+  });
+}
+
+export async function deleteFaculty(user: StoredUser, facultyId: number): Promise<SimpleSuccessResponse> {
+  return postRequest<SimpleSuccessResponse>(API_PATHS.manageUsers, {
+    ...authParams(user),
+    action: 'delete_faculty',
+    faculty_id: facultyId,
+  });
+}
+
+export async function createDepartment(
+  user: StoredUser,
+  payload: { code?: string | null; faculty_id: number; name: string }
+): Promise<SimpleSuccessResponse> {
+  return postRequest<SimpleSuccessResponse>(API_PATHS.manageUsers, {
+    ...authParams(user),
+    ...payload,
+    action: 'create_department',
+  });
+}
+
+export async function deleteDepartment(
+  user: StoredUser,
+  departmentId: number
+): Promise<SimpleSuccessResponse> {
+  return postRequest<SimpleSuccessResponse>(API_PATHS.manageUsers, {
+    ...authParams(user),
+    action: 'delete_department',
+    department_id: departmentId,
+  });
+}
+
+export async function updateLandingPageTheme(
+  user: StoredUser,
+  payload: { background_color?: string | null }
+): Promise<SimpleSuccessResponse> {
+  return postRequest<SimpleSuccessResponse>(API_PATHS.manageUsers, {
+    ...authParams(user),
+    ...payload,
+    action: 'update_landing_page_theme',
+  });
+}
+
+export async function uploadLandingPageBackground(
+  user: StoredUser,
+  asset: UploadAsset
+): Promise<SimpleSuccessResponse> {
+  return postMultipartRequest<SimpleSuccessResponse>(
+    API_PATHS.manageUsers,
+    {
+      ...authParams(user),
+      action: 'upload_landing_background',
+    },
+    {
+      background_image: asset,
+    }
+  );
+}
+
+export async function clearLandingPageBackground(user: StoredUser): Promise<SimpleSuccessResponse> {
+  return postRequest<SimpleSuccessResponse>(API_PATHS.manageUsers, {
+    ...authParams(user),
+    action: 'clear_landing_background',
   });
 }
 
