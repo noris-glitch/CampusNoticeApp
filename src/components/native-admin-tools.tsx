@@ -462,25 +462,7 @@ export function ManageUsersSection({ isActive, onDirty, refreshToken, session }:
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<'all' | UserRole>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
-  const [facultyName, setFacultyName] = useState('');
-  const [departmentName, setDepartmentName] = useState('');
-  const [departmentCode, setDepartmentCode] = useState('');
-  const [departmentFacultyId, setDepartmentFacultyId] = useState<number | null>(null);
-  const [landingColor, setLandingColor] = useState('#17324D');
-  const [landingBackgroundFile, setLandingBackgroundFile] = useState<UploadAsset | null>(null);
   const deferredSearch = useDeferredValue(search.trim().toLowerCase());
-
-  const applyResponse = (next: ManageUsersResponse) => {
-    setResponse(next);
-    setLandingColor(next.landing_page?.background_color || '#17324D');
-    setDepartmentFacultyId((current) => {
-      if (current !== null && next.faculties.some((faculty) => faculty.id === current)) {
-        return current;
-      }
-
-      return next.faculties[0]?.id ?? null;
-    });
-  };
 
   useEffect(() => {
     if (!isActive) {
@@ -495,7 +477,7 @@ export function ManageUsersSection({ isActive, onDirty, refreshToken, session }:
       try {
         const next = await fetchManageUsers(session);
         if (isMounted) {
-          applyResponse(next);
+          setResponse(next);
         }
       } catch (loadError) {
         if (isMounted) {
@@ -516,7 +498,7 @@ export function ManageUsersSection({ isActive, onDirty, refreshToken, session }:
 
   const refresh = async () => {
     const next = await fetchManageUsers(session);
-    applyResponse(next);
+    setResponse(next);
   };
 
   const users = (response?.users || []).filter((item) => {
@@ -545,17 +527,6 @@ export function ManageUsersSection({ isActive, onDirty, refreshToken, session }:
   const visibleDepartments = (response?.departments || []).filter(
     (department) =>
       draft.faculty_id === null || department.faculty_id === draft.faculty_id || department.faculty_id === null
-  );
-  const departmentCatalogue = response?.departments || [];
-  const landingPreviewUrl = landingBackgroundUrl(response?.landing_page?.background_image_url || null);
-  const facultyDepartmentCounts = departmentCatalogue.reduce<Record<number, number>>((counts, department) => {
-    if (department.faculty_id) {
-      counts[department.faculty_id] = (counts[department.faculty_id] || 0) + 1;
-    }
-    return counts;
-  }, {});
-  const visibleDepartmentCatalogue = departmentCatalogue.filter((department) =>
-    departmentFacultyId === null ? true : department.faculty_id === departmentFacultyId
   );
 
   const resetDraft = () => {
@@ -622,183 +593,6 @@ export function ManageUsersSection({ isActive, onDirty, refreshToken, session }:
     }
   };
 
-  const saveFaculty = async () => {
-    if (!facultyName.trim()) {
-      Alert.alert('Campus structure', 'Enter a faculty name first.');
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const result = await createFaculty(session, { name: facultyName.trim() });
-      Alert.alert('Campus structure', result.message || 'Faculty created successfully.');
-      setFacultyName('');
-      onDirty();
-      await refresh();
-    } catch (saveError) {
-      Alert.alert('Campus structure', getApiErrorMessage(saveError, 'Could not create that faculty.'));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const saveDepartment = async () => {
-    if (departmentFacultyId === null) {
-      Alert.alert('Campus structure', 'Choose a faculty for this department.');
-      return;
-    }
-
-    if (!departmentName.trim()) {
-      Alert.alert('Campus structure', 'Enter a department name first.');
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const result = await createDepartment(session, {
-        code: departmentCode.trim() || null,
-        faculty_id: departmentFacultyId,
-        name: departmentName.trim(),
-      });
-      Alert.alert('Campus structure', result.message || 'Department created successfully.');
-      setDepartmentName('');
-      setDepartmentCode('');
-      onDirty();
-      await refresh();
-    } catch (saveError) {
-      Alert.alert('Campus structure', getApiErrorMessage(saveError, 'Could not create that department.'));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const confirmDeleteFaculty = (facultyId: number, name: string) => {
-    Alert.alert('Delete faculty', `Delete ${name}?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: () => {
-          void (async () => {
-            setSaving(true);
-            try {
-              const result = await deleteFaculty(session, facultyId);
-              Alert.alert('Campus structure', result.message || 'Faculty deleted successfully.');
-              onDirty();
-              await refresh();
-            } catch (deleteError) {
-              Alert.alert('Campus structure', getApiErrorMessage(deleteError, 'Could not delete that faculty.'));
-            } finally {
-              setSaving(false);
-            }
-          })();
-        },
-      },
-    ]);
-  };
-
-  const confirmDeleteDepartment = (departmentId: number, name: string) => {
-    Alert.alert('Delete department', `Delete ${name}?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: () => {
-          void (async () => {
-            setSaving(true);
-            try {
-              const result = await deleteDepartment(session, departmentId);
-              Alert.alert('Campus structure', result.message || 'Department deleted successfully.');
-              onDirty();
-              await refresh();
-            } catch (deleteError) {
-              Alert.alert('Campus structure', getApiErrorMessage(deleteError, 'Could not delete that department.'));
-            } finally {
-              setSaving(false);
-            }
-          })();
-        },
-      },
-    ]);
-  };
-
-  const pickLandingBackground = async () => {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        copyToCacheDirectory: true,
-        type: 'image/*',
-      });
-
-      if (result.canceled || !result.assets?.[0]) {
-        return;
-      }
-
-      const asset = result.assets[0];
-      setLandingBackgroundFile({
-        fileSize: asset.size,
-        mimeType: asset.mimeType,
-        name: asset.name,
-        uri: asset.uri,
-      });
-    } catch (pickError) {
-      Alert.alert('Login background', getApiErrorMessage(pickError, 'Could not pick that image.'));
-    }
-  };
-
-  const uploadLoginBackground = async () => {
-    if (!landingBackgroundFile) {
-      Alert.alert('Login background', 'Choose an image first.');
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const result = await uploadLandingPageBackground(session, landingBackgroundFile);
-      Alert.alert('Login background', result.message || 'Login background updated.');
-      setLandingBackgroundFile(null);
-      onDirty();
-      await refresh();
-    } catch (uploadError) {
-      Alert.alert('Login background', getApiErrorMessage(uploadError, 'Could not upload that background image.'));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const saveLandingColor = async () => {
-    if (!landingColor.trim()) {
-      Alert.alert('Login background', 'Enter a fallback color such as #17324D.');
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const result = await updateLandingPageTheme(session, { background_color: landingColor.trim() });
-      Alert.alert('Login background', result.message || 'Login background color updated.');
-      onDirty();
-      await refresh();
-    } catch (themeError) {
-      Alert.alert('Login background', getApiErrorMessage(themeError, 'Could not save that fallback color.'));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const clearLoginBackground = async () => {
-    setSaving(true);
-    try {
-      const result = await clearLandingPageBackground(session);
-      Alert.alert('Login background', result.message || 'Login background removed.');
-      setLandingBackgroundFile(null);
-      onDirty();
-      await refresh();
-    } catch (clearError) {
-      Alert.alert('Login background', getApiErrorMessage(clearError, 'Could not remove that background image.'));
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const confirmDeleteUser = (item: ManagedUserItem) => {
     Alert.alert('Delete user', `Delete ${item.name}?`, [
       { text: 'Cancel', style: 'cancel' },
@@ -831,7 +625,7 @@ export function ManageUsersSection({ isActive, onDirty, refreshToken, session }:
     <ScrollView contentContainerStyle={styles.screen}>
       <SectionIntro
         title="Manage all users"
-        subtitle="Create, edit, filter, and remove accounts directly from the native admin app."
+        subtitle="Create, edit, filter, and remove accounts directly from the native admin app. Campus structure and login background controls now live under Customization."
       />
 
       {response ? (
@@ -840,12 +634,6 @@ export function ManageUsersSection({ isActive, onDirty, refreshToken, session }:
           <MetricCard label="Students" value={response.stats.total_students} />
           <MetricCard label="Admins" value={response.stats.total_admins} />
           <MetricCard label="Active" value={response.stats.active_users} />
-          {response.stats.total_faculties !== undefined ? (
-            <MetricCard label="Faculties" value={response.stats.total_faculties} />
-          ) : null}
-          {response.stats.total_departments !== undefined ? (
-            <MetricCard label="Departments" value={response.stats.total_departments} />
-          ) : null}
           {response.stats.authorized_short_creators !== undefined ? (
             <MetricCard
               label="Short creators"
@@ -853,176 +641,6 @@ export function ManageUsersSection({ isActive, onDirty, refreshToken, session }:
             />
           ) : null}
         </View>
-      ) : null}
-
-      {response ? (
-        <>
-          <Panel>
-            <Text style={styles.sectionTitle}>Faculties</Text>
-            <Text style={styles.bodyText}>
-              Create or remove faculties before assigning users, notices, and departments to them.
-            </Text>
-            <Text style={styles.label}>New faculty name</Text>
-            <TextInput
-              placeholder="School of Informatics"
-              placeholderTextColor={palette.muted}
-              style={styles.input}
-              value={facultyName}
-              onChangeText={setFacultyName}
-            />
-            <ActionButton
-              disabled={saving}
-              label={saving ? 'Saving...' : 'Add faculty'}
-              onPress={() => void saveFaculty()}
-              tone="accent"
-            />
-            <View style={styles.catalogueGroup}>
-              {response.faculties.length === 0 ? (
-                <Text style={styles.helperText}>No faculties are configured yet.</Text>
-              ) : (
-                response.faculties.map((faculty) => (
-                  <View key={faculty.id} style={styles.catalogueCard}>
-                    <View style={styles.catalogueHeader}>
-                      <View style={styles.catalogueTextWrap}>
-                        <Text style={styles.cardTitle}>{faculty.name}</Text>
-                        <Text style={styles.metaText}>
-                          {facultyDepartmentCounts[faculty.id] || 0} department(s)
-                        </Text>
-                      </View>
-                      <ActionButton
-                        disabled={saving}
-                        label="Delete"
-                        onPress={() => confirmDeleteFaculty(faculty.id, faculty.name)}
-                        tone="danger"
-                      />
-                    </View>
-                  </View>
-                ))
-              )}
-            </View>
-          </Panel>
-
-          <Panel>
-            <Text style={styles.sectionTitle}>Departments</Text>
-            <Text style={styles.bodyText}>
-              Departments belong to a faculty and are used for user assignment and notice targeting.
-            </Text>
-            <Text style={styles.label}>Faculty</Text>
-            <View style={styles.wrapRow}>
-              {response.faculties.map((faculty) => (
-                <ChoicePill
-                  key={faculty.id}
-                  active={departmentFacultyId === faculty.id}
-                  label={faculty.name}
-                  onPress={() => setDepartmentFacultyId(faculty.id)}
-                />
-              ))}
-            </View>
-            <Text style={styles.label}>Department name</Text>
-            <TextInput
-              placeholder="Accounts"
-              placeholderTextColor={palette.muted}
-              style={styles.input}
-              value={departmentName}
-              onChangeText={setDepartmentName}
-            />
-            <Text style={styles.label}>Department code</Text>
-            <TextInput
-              placeholder="ACC"
-              placeholderTextColor={palette.muted}
-              style={styles.input}
-              value={departmentCode}
-              onChangeText={setDepartmentCode}
-            />
-            <ActionButton
-              disabled={saving || response.faculties.length === 0}
-              label={saving ? 'Saving...' : 'Add department'}
-              onPress={() => void saveDepartment()}
-              tone="accent"
-            />
-            <View style={styles.catalogueGroup}>
-              {visibleDepartmentCatalogue.length === 0 ? (
-                <Text style={styles.helperText}>
-                  {response.faculties.length === 0
-                    ? 'Create a faculty first.'
-                    : 'No departments are configured for the selected faculty yet.'}
-                </Text>
-              ) : (
-                visibleDepartmentCatalogue.map((department) => (
-                  <View key={department.id} style={styles.catalogueCard}>
-                    <View style={styles.catalogueHeader}>
-                      <View style={styles.catalogueTextWrap}>
-                        <Text style={styles.cardTitle}>{department.name}</Text>
-                        <Text style={styles.metaText}>
-                          {department.faculty_name || 'No faculty'}
-                          {department.code ? ` · ${department.code}` : ''}
-                        </Text>
-                      </View>
-                      <ActionButton
-                        disabled={saving}
-                        label="Delete"
-                        onPress={() => confirmDeleteDepartment(department.id, department.name)}
-                        tone="danger"
-                      />
-                    </View>
-                  </View>
-                ))
-              )}
-            </View>
-          </Panel>
-
-          <Panel>
-            <Text style={styles.sectionTitle}>Login background picture</Text>
-            <Text style={styles.bodyText}>
-              This picture appears behind the login page on the website and on the native app sign-in screen.
-            </Text>
-            {landingPreviewUrl ? (
-              <Image source={{ uri: landingPreviewUrl }} style={styles.previewImage} />
-            ) : (
-              <View style={styles.previewPlaceholder}>
-                <Text style={styles.helperText}>No custom login background picture uploaded yet.</Text>
-              </View>
-            )}
-            <Pressable onPress={() => void pickLandingBackground()} style={styles.filePicker}>
-              <Text style={styles.filePickerText}>
-                {landingBackgroundFile
-                  ? landingBackgroundFile.name
-                  : response.landing_page.background_image || 'Choose login background image'}
-              </Text>
-            </Pressable>
-            <View style={styles.buttonRow}>
-              <ActionButton
-                disabled={saving}
-                label={saving ? 'Uploading...' : 'Upload picture'}
-                onPress={() => void uploadLoginBackground()}
-                tone="warm"
-              />
-              {response.landing_page.background_image ? (
-                <ActionButton
-                  disabled={saving}
-                  label="Remove picture"
-                  onPress={() => void clearLoginBackground()}
-                  tone="danger"
-                />
-              ) : null}
-            </View>
-            <Text style={styles.label}>Fallback background color</Text>
-            <TextInput
-              autoCapitalize="characters"
-              placeholder="#17324D"
-              placeholderTextColor={palette.muted}
-              style={styles.input}
-              value={landingColor}
-              onChangeText={setLandingColor}
-            />
-            <ActionButton
-              disabled={saving}
-              label={saving ? 'Saving...' : 'Save fallback color'}
-              onPress={() => void saveLandingColor()}
-              tone="navy"
-            />
-          </Panel>
-        </>
       ) : null}
 
       <Panel>
@@ -1277,6 +895,456 @@ export function ManageUsersSection({ isActive, onDirty, refreshToken, session }:
             ))
           )}
         </Panel>
+      ) : null}
+    </ScrollView>
+  );
+}
+
+export function CustomizationSection({ isActive, onDirty, refreshToken, session }: BaseProps) {
+  const [response, setResponse] = useState<ManageUsersResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [facultyName, setFacultyName] = useState('');
+  const [departmentName, setDepartmentName] = useState('');
+  const [departmentCode, setDepartmentCode] = useState('');
+  const [departmentFacultyId, setDepartmentFacultyId] = useState<number | null>(null);
+  const [landingColor, setLandingColor] = useState('#17324D');
+  const [landingBackgroundFile, setLandingBackgroundFile] = useState<UploadAsset | null>(null);
+
+  const applyResponse = (next: ManageUsersResponse) => {
+    setResponse(next);
+    setLandingColor(next.landing_page?.background_color || '#17324D');
+    setDepartmentFacultyId((current) => {
+      if (current !== null && next.faculties.some((faculty) => faculty.id === current)) {
+        return current;
+      }
+
+      return next.faculties[0]?.id ?? null;
+    });
+  };
+
+  useEffect(() => {
+    if (!isActive) {
+      return;
+    }
+
+    let isMounted = true;
+
+    async function load() {
+      setLoading(true);
+      setError(null);
+      try {
+        const next = await fetchManageUsers(session);
+        if (isMounted) {
+          applyResponse(next);
+        }
+      } catch (loadError) {
+        if (isMounted) {
+          setError(getApiErrorMessage(loadError, 'Could not load customization right now.'));
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void load();
+    return () => {
+      isMounted = false;
+    };
+  }, [isActive, refreshToken, session]);
+
+  const refresh = async () => {
+    const next = await fetchManageUsers(session);
+    applyResponse(next);
+  };
+
+  const departmentCatalogue = response?.departments || [];
+  const landingPreviewUrl = landingBackgroundUrl(response?.landing_page?.background_image_url || null);
+  const facultyDepartmentCounts = departmentCatalogue.reduce<Record<number, number>>((counts, department) => {
+    if (department.faculty_id) {
+      counts[department.faculty_id] = (counts[department.faculty_id] || 0) + 1;
+    }
+    return counts;
+  }, {});
+  const visibleDepartmentCatalogue = departmentCatalogue.filter((department) =>
+    departmentFacultyId === null ? true : department.faculty_id === departmentFacultyId
+  );
+
+  const saveFaculty = async () => {
+    if (!facultyName.trim()) {
+      Alert.alert('Customization', 'Enter a faculty name first.');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const result = await createFaculty(session, { name: facultyName.trim() });
+      Alert.alert('Customization', result.message || 'Faculty created successfully.');
+      setFacultyName('');
+      onDirty();
+      await refresh();
+    } catch (saveError) {
+      Alert.alert('Customization', getApiErrorMessage(saveError, 'Could not create that faculty.'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveDepartment = async () => {
+    if (departmentFacultyId === null) {
+      Alert.alert('Customization', 'Choose a faculty for this department.');
+      return;
+    }
+
+    if (!departmentName.trim()) {
+      Alert.alert('Customization', 'Enter a department name first.');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const result = await createDepartment(session, {
+        code: departmentCode.trim() || null,
+        faculty_id: departmentFacultyId,
+        name: departmentName.trim(),
+      });
+      Alert.alert('Customization', result.message || 'Department created successfully.');
+      setDepartmentName('');
+      setDepartmentCode('');
+      onDirty();
+      await refresh();
+    } catch (saveError) {
+      Alert.alert('Customization', getApiErrorMessage(saveError, 'Could not create that department.'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const confirmDeleteFaculty = (facultyId: number, name: string) => {
+    Alert.alert('Delete faculty', `Delete ${name}?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => {
+          void (async () => {
+            setSaving(true);
+            try {
+              const result = await deleteFaculty(session, facultyId);
+              Alert.alert('Customization', result.message || 'Faculty deleted successfully.');
+              onDirty();
+              await refresh();
+            } catch (deleteError) {
+              Alert.alert('Customization', getApiErrorMessage(deleteError, 'Could not delete that faculty.'));
+            } finally {
+              setSaving(false);
+            }
+          })();
+        },
+      },
+    ]);
+  };
+
+  const confirmDeleteDepartment = (departmentId: number, name: string) => {
+    Alert.alert('Delete department', `Delete ${name}?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => {
+          void (async () => {
+            setSaving(true);
+            try {
+              const result = await deleteDepartment(session, departmentId);
+              Alert.alert('Customization', result.message || 'Department deleted successfully.');
+              onDirty();
+              await refresh();
+            } catch (deleteError) {
+              Alert.alert('Customization', getApiErrorMessage(deleteError, 'Could not delete that department.'));
+            } finally {
+              setSaving(false);
+            }
+          })();
+        },
+      },
+    ]);
+  };
+
+  const pickLandingBackground = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        copyToCacheDirectory: true,
+        type: 'image/*',
+      });
+
+      if (result.canceled || !result.assets?.[0]) {
+        return;
+      }
+
+      const asset = result.assets[0];
+      setLandingBackgroundFile({
+        fileSize: asset.size,
+        mimeType: asset.mimeType,
+        name: asset.name,
+        uri: asset.uri,
+      });
+    } catch (pickError) {
+      Alert.alert('Login background', getApiErrorMessage(pickError, 'Could not pick that image.'));
+    }
+  };
+
+  const uploadLoginBackground = async () => {
+    if (!landingBackgroundFile) {
+      Alert.alert('Login background', 'Choose an image first.');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const result = await uploadLandingPageBackground(session, landingBackgroundFile);
+      Alert.alert('Login background', result.message || 'Login background updated.');
+      setLandingBackgroundFile(null);
+      onDirty();
+      await refresh();
+    } catch (uploadError) {
+      Alert.alert('Login background', getApiErrorMessage(uploadError, 'Could not upload that background image.'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveLandingColor = async () => {
+    if (!landingColor.trim()) {
+      Alert.alert('Login background', 'Enter a fallback color such as #17324D.');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const result = await updateLandingPageTheme(session, { background_color: landingColor.trim() });
+      Alert.alert('Login background', result.message || 'Login background color updated.');
+      onDirty();
+      await refresh();
+    } catch (themeError) {
+      Alert.alert('Login background', getApiErrorMessage(themeError, 'Could not save that fallback color.'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const clearLoginBackground = async () => {
+    setSaving(true);
+    try {
+      const result = await clearLandingPageBackground(session);
+      Alert.alert('Login background', result.message || 'Login background removed.');
+      setLandingBackgroundFile(null);
+      onDirty();
+      await refresh();
+    } catch (clearError) {
+      Alert.alert('Login background', getApiErrorMessage(clearError, 'Could not remove that background image.'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <ScrollView contentContainerStyle={styles.screen}>
+      <SectionIntro
+        title="Customization"
+        subtitle="Manage campus structure and the login background picture from one place."
+      />
+
+      {response ? (
+        <View style={styles.metricGrid}>
+          {response.stats.total_faculties !== undefined ? (
+            <MetricCard label="Faculties" value={response.stats.total_faculties} />
+          ) : null}
+          {response.stats.total_departments !== undefined ? (
+            <MetricCard label="Departments" value={response.stats.total_departments} />
+          ) : null}
+          {response.stats.total_students !== undefined ? (
+            <MetricCard label="Students" value={response.stats.total_students} />
+          ) : null}
+          {response.stats.students_missing_departments !== undefined ? (
+            <MetricCard label="Missing dept" value={response.stats.students_missing_departments} />
+          ) : null}
+        </View>
+      ) : null}
+
+      {loading ? <LoadingState label="Loading customization..." /> : null}
+      {error ? <ErrorState message={error} /> : null}
+
+      {!loading && !error && response ? (
+        <>
+          <Panel>
+            <Text style={styles.sectionTitle}>Faculties</Text>
+            <Text style={styles.bodyText}>
+              Create or remove faculties before assigning users, notices, and departments to them.
+            </Text>
+            <Text style={styles.label}>New faculty name</Text>
+            <TextInput
+              placeholder="School of Informatics"
+              placeholderTextColor={palette.muted}
+              style={styles.input}
+              value={facultyName}
+              onChangeText={setFacultyName}
+            />
+            <ActionButton
+              disabled={saving}
+              label={saving ? 'Saving...' : 'Add faculty'}
+              onPress={() => void saveFaculty()}
+              tone="accent"
+            />
+            <View style={styles.catalogueGroup}>
+              {response.faculties.length === 0 ? (
+                <Text style={styles.helperText}>No faculties are configured yet.</Text>
+              ) : (
+                response.faculties.map((faculty) => (
+                  <View key={faculty.id} style={styles.catalogueCard}>
+                    <View style={styles.catalogueHeader}>
+                      <View style={styles.catalogueTextWrap}>
+                        <Text style={styles.cardTitle}>{faculty.name}</Text>
+                        <Text style={styles.metaText}>
+                          {facultyDepartmentCounts[faculty.id] || 0} department(s)
+                        </Text>
+                      </View>
+                      <ActionButton
+                        disabled={saving}
+                        label="Delete"
+                        onPress={() => confirmDeleteFaculty(faculty.id, faculty.name)}
+                        tone="danger"
+                      />
+                    </View>
+                  </View>
+                ))
+              )}
+            </View>
+          </Panel>
+
+          <Panel>
+            <Text style={styles.sectionTitle}>Departments</Text>
+            <Text style={styles.bodyText}>
+              Departments belong to a faculty and are used for user assignment and notice targeting.
+            </Text>
+            <Text style={styles.label}>Faculty</Text>
+            <View style={styles.wrapRow}>
+              {response.faculties.map((faculty) => (
+                <ChoicePill
+                  key={faculty.id}
+                  active={departmentFacultyId === faculty.id}
+                  label={faculty.name}
+                  onPress={() => setDepartmentFacultyId(faculty.id)}
+                />
+              ))}
+            </View>
+            <Text style={styles.label}>Department name</Text>
+            <TextInput
+              placeholder="Accounts"
+              placeholderTextColor={palette.muted}
+              style={styles.input}
+              value={departmentName}
+              onChangeText={setDepartmentName}
+            />
+            <Text style={styles.label}>Department code</Text>
+            <TextInput
+              placeholder="ACC"
+              placeholderTextColor={palette.muted}
+              style={styles.input}
+              value={departmentCode}
+              onChangeText={setDepartmentCode}
+            />
+            <ActionButton
+              disabled={saving || response.faculties.length === 0}
+              label={saving ? 'Saving...' : 'Add department'}
+              onPress={() => void saveDepartment()}
+              tone="accent"
+            />
+            <View style={styles.catalogueGroup}>
+              {visibleDepartmentCatalogue.length === 0 ? (
+                <Text style={styles.helperText}>
+                  {response.faculties.length === 0
+                    ? 'Create a faculty first.'
+                    : 'No departments are configured for the selected faculty yet.'}
+                </Text>
+              ) : (
+                visibleDepartmentCatalogue.map((department) => (
+                  <View key={department.id} style={styles.catalogueCard}>
+                    <View style={styles.catalogueHeader}>
+                      <View style={styles.catalogueTextWrap}>
+                        <Text style={styles.cardTitle}>{department.name}</Text>
+                        <Text style={styles.metaText}>
+                          {department.faculty_name || 'No faculty'}
+                          {department.code ? ` · ${department.code}` : ''}
+                        </Text>
+                      </View>
+                      <ActionButton
+                        disabled={saving}
+                        label="Delete"
+                        onPress={() => confirmDeleteDepartment(department.id, department.name)}
+                        tone="danger"
+                      />
+                    </View>
+                  </View>
+                ))
+              )}
+            </View>
+          </Panel>
+
+          <Panel>
+            <Text style={styles.sectionTitle}>Login background picture</Text>
+            <Text style={styles.bodyText}>
+              This picture appears behind the login page on the website and on the native app sign-in screen.
+            </Text>
+            {landingPreviewUrl ? (
+              <Image source={{ uri: landingPreviewUrl }} style={styles.previewImage} />
+            ) : (
+              <View style={styles.previewPlaceholder}>
+                <Text style={styles.helperText}>No custom login background picture uploaded yet.</Text>
+              </View>
+            )}
+            <Pressable onPress={() => void pickLandingBackground()} style={styles.filePicker}>
+              <Text style={styles.filePickerText}>
+                {landingBackgroundFile
+                  ? landingBackgroundFile.name
+                  : response.landing_page.background_image || 'Choose login background image'}
+              </Text>
+            </Pressable>
+            <View style={styles.buttonRow}>
+              <ActionButton
+                disabled={saving}
+                label={saving ? 'Uploading...' : 'Upload picture'}
+                onPress={() => void uploadLoginBackground()}
+                tone="warm"
+              />
+              {response.landing_page.background_image ? (
+                <ActionButton
+                  disabled={saving}
+                  label="Remove picture"
+                  onPress={() => void clearLoginBackground()}
+                  tone="danger"
+                />
+              ) : null}
+            </View>
+            <Text style={styles.label}>Fallback background color</Text>
+            <TextInput
+              autoCapitalize="characters"
+              placeholder="#17324D"
+              placeholderTextColor={palette.muted}
+              style={styles.input}
+              value={landingColor}
+              onChangeText={setLandingColor}
+            />
+            <ActionButton
+              disabled={saving}
+              label={saving ? 'Saving...' : 'Save fallback color'}
+              onPress={() => void saveLandingColor()}
+              tone="navy"
+            />
+          </Panel>
+        </>
       ) : null}
     </ScrollView>
   );

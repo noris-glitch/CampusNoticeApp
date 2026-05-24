@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { FeedbackInboxSection, StudentFeedbackSection } from '@/components/native-feedback-sections';
 import {
+  CustomizationSection,
   EmergencyAlertsSection,
   HelpSupportSection,
   ManageUsersSection,
@@ -34,6 +35,7 @@ type ScreenKey =
   | 'bookmarks'
   | 'create'
   | 'createLocation'
+  | 'customization'
   | 'dashboard'
   | 'emergency'
   | 'eventMap'
@@ -309,6 +311,14 @@ export default function NativeAppShell({
               session={session}
             />
           ) : null}
+          {activeScreen === 'customization' ? (
+            <CustomizationSection
+              isActive
+              onDirty={handleDirty}
+              refreshToken={refreshToken}
+              session={session}
+            />
+          ) : null}
           {activeScreen === 'studentSync' ? (
             <StudentSyncSection
               isActive
@@ -438,6 +448,10 @@ function getMenuSections(
           { icon: '👥', key: 'manageUsers', label: 'Manage all users' },
           { icon: '🔄', key: 'studentSync', label: 'Student sync' },
         ],
+      },
+      {
+        heading: 'Customization',
+        items: [{ icon: '🎨', key: 'customization', label: 'Customization' }],
       },
       {
         heading: 'Engagement',
