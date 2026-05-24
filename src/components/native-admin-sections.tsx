@@ -193,6 +193,7 @@ function AnalyticsSummary({ dashboard }: { dashboard: AdminDashboardData }) {
   if (!series || Object.keys(series).length === 0) {
     return <Text style={styles.mutedText}>No analytics data yet.</Text>;
   }
+  const [selectedMetric, setSelectedMetric] = useState('logins');
 
   const seriesPoints = (key: string): number[] => {
     const raw = series[key]?.points;
@@ -212,14 +213,79 @@ function AnalyticsSummary({ dashboard }: { dashboard: AdminDashboardData }) {
     { key: 'notifications_read', label: 'Notif read', points: seriesPoints('notifications_read') },
   ];
 
+  const activeMetric = metrics.find((item) => item.key === selectedMetric) || metrics[0];
+
   return (
     <View style={{ marginTop: 10 }}>
+      <View style={styles.wrapRow}>
+        {metrics.map((metric) => (
+          <ChoicePill
+            key={metric.key}
+            active={metric.key === activeMetric.key}
+            label={metric.label}
+            onPress={() => setSelectedMetric(metric.key)}
+          />
+        ))}
+      </View>
+      <LineGraph points={activeMetric.points} />
       {metrics.map((metric) => (
         <View key={metric.key} style={styles.listRow}>
           <Text style={styles.listTitle}>{metric.label}</Text>
           <Text style={styles.listMeta}>{drawSparkline(metric.points)} ({metric.points.reduce((a, b) => a + b, 0)})</Text>
         </View>
       ))}
+    </View>
+  );
+}
+
+function LineGraph({ points }: { points: number[] }) {
+  if (!points.length) {
+    return <Text style={styles.mutedText}>No points to plot for this range.</Text>;
+  }
+
+  const chartWidth = 300;
+  const chartHeight = 140;
+  const padX = 12;
+  const padY = 12;
+  const plotW = chartWidth - padX * 2;
+  const plotH = chartHeight - padY * 2;
+  const maxValue = Math.max(...points, 1);
+  const stepX = points.length > 1 ? plotW / (points.length - 1) : 0;
+
+  const coords = points.map((value, index) => ({
+    x: padX + index * stepX,
+    y: padY + (1 - value / maxValue) * plotH,
+    value,
+  }));
+
+  return (
+    <View style={styles.lineGraphFrame}>
+      <View style={styles.lineGraphGrid} />
+      {coords.slice(0, -1).map((from, index) => {
+        const to = coords[index + 1];
+        const dx = to.x - from.x;
+        const dy = to.y - from.y;
+        const length = Math.sqrt(dx * dx + dy * dy);
+        const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+        return (
+          <View
+            key={`segment-${index}`}
+            style={[
+              styles.lineSegment,
+              {
+                left: from.x,
+                top: from.y,
+                transform: [{ rotateZ: `${angle}deg` }],
+                width: length,
+              },
+            ]}
+          />
+        );
+      })}
+      {coords.map((point, index) => (
+        <View key={`dot-${index}`} style={[styles.lineDot, { left: point.x - 3, top: point.y - 3 }]} />
+      ))}
+      <Text style={styles.lineGraphMax}>Max {maxValue}</Text>
     </View>
   );
 }
@@ -1326,6 +1392,48 @@ const styles = StyleSheet.create({
     color: palette.ink,
     fontSize: 16,
     fontWeight: '800',
+  },
+  lineDot: {
+    backgroundColor: palette.accent,
+    borderRadius: 999,
+    height: 6,
+    position: 'absolute',
+    width: 6,
+  },
+  lineGraphFrame: {
+    backgroundColor: '#f8fbff',
+    borderColor: palette.line,
+    borderRadius: 12,
+    borderWidth: 1,
+    height: 140,
+    marginTop: 10,
+    overflow: 'hidden',
+    position: 'relative',
+    width: '100%',
+  },
+  lineGraphGrid: {
+    borderBottomColor: '#e6eef8',
+    borderBottomWidth: 1,
+    borderTopColor: '#e6eef8',
+    borderTopWidth: 1,
+    height: '50%',
+    left: 0,
+    position: 'absolute',
+    top: '25%',
+    width: '100%',
+  },
+  lineGraphMax: {
+    color: palette.muted,
+    fontSize: 11,
+    fontWeight: '700',
+    position: 'absolute',
+    right: 8,
+    top: 6,
+  },
+  lineSegment: {
+    backgroundColor: palette.accent,
+    height: 2,
+    position: 'absolute',
   },
   metricCard: {
     backgroundColor: '#edf3f9',
