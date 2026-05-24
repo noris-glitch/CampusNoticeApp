@@ -189,19 +189,27 @@ export function AdminDashboardSection({
 }
 
 function AnalyticsSummary({ dashboard }: { dashboard: AdminDashboardData }) {
-  const series = dashboard.analytics?.series;
-  if (!series) {
+  const series = dashboard.analytics?.series as Record<string, { labels?: number[] | string[]; points?: number[] }> | undefined;
+  if (!series || Object.keys(series).length === 0) {
     return <Text style={styles.mutedText}>No analytics data yet.</Text>;
   }
 
+  const seriesPoints = (key: string): number[] => {
+    const raw = series[key]?.points;
+    if (!Array.isArray(raw)) {
+      return [];
+    }
+    return raw.map((value) => (typeof value === 'number' && Number.isFinite(value) ? value : 0));
+  };
+
   const metrics = [
-    { key: 'logins', label: 'Logins', points: series.logins.points },
-    { key: 'notices_viewed', label: 'Views', points: series.notices_viewed.points },
-    { key: 'notices_posted', label: 'Posted', points: series.notices_posted.points },
-    { key: 'notice_downloads', label: 'Downloads', points: series.notice_downloads.points },
-    { key: 'notice_comments', label: 'Comments', points: series.notice_comments.points },
-    { key: 'active_users', label: 'Active users', points: series.active_users.points },
-    { key: 'notifications_read', label: 'Notif read', points: series.notifications_read.points },
+    { key: 'logins', label: 'Logins', points: seriesPoints('logins') },
+    { key: 'notices_viewed', label: 'Views', points: seriesPoints('notices_viewed') },
+    { key: 'notices_posted', label: 'Posted', points: seriesPoints('notices_posted') },
+    { key: 'notice_downloads', label: 'Downloads', points: seriesPoints('notice_downloads') },
+    { key: 'notice_comments', label: 'Comments', points: seriesPoints('notice_comments') },
+    { key: 'active_users', label: 'Active users', points: seriesPoints('active_users') },
+    { key: 'notifications_read', label: 'Notif read', points: seriesPoints('notifications_read') },
   ];
 
   return (

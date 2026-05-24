@@ -1434,6 +1434,7 @@ export async function runShortAction(
 
 export function getApiErrorMessage(error: unknown, fallback: string): string {
   if (axios.isAxiosError(error)) {
+    const status = error.response?.status;
     const responseData = error.response?.data;
 
     if (
@@ -1446,7 +1447,24 @@ export function getApiErrorMessage(error: unknown, fallback: string): string {
     }
 
     if (typeof responseData === 'string' && responseData.trim() !== '') {
-      return responseData;
+      const text = responseData.trim();
+      if (/<!doctype html>|<html/i.test(text)) {
+        if (status === 502 || status === 503 || status === 504) {
+          return 'The server is waking up or temporarily unavailable. Please wait a few seconds and try again.';
+        }
+        if (status === 500) {
+          return 'The server hit an internal error. Please retry in a few seconds.';
+        }
+        return fallback;
+      }
+      return text;
+    }
+
+    if (status === 500) {
+      return 'The server hit an internal error. Please retry in a few seconds.';
+    }
+    if (status === 502 || status === 503 || status === 504) {
+      return 'The server is waking up or temporarily unavailable. Please wait a few seconds and try again.';
     }
 
     if (error.code === 'ECONNABORTED') {
