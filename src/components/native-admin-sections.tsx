@@ -124,7 +124,7 @@ export function AdminDashboardSection({
           ))}
         </View>
         {loading ? <Text style={styles.mutedText}>Refreshing analytics...</Text> : null}
-        {dashboard.analytics?.series ? <AnalyticsSummary dashboard={dashboard} /> : null}
+        <AnalyticsSummary dashboard={dashboard} />
       </Panel>
 
       <View style={styles.metricGrid}>
@@ -190,17 +190,22 @@ export function AdminDashboardSection({
 
 function AnalyticsSummary({ dashboard }: { dashboard: AdminDashboardData }) {
   const series = dashboard.analytics?.series as Record<string, { labels?: number[] | string[]; points?: number[] }> | undefined;
-  if (!series || Object.keys(series).length === 0) {
-    return <Text style={styles.mutedText}>No analytics data yet.</Text>;
-  }
   const [selectedMetric, setSelectedMetric] = useState('logins');
 
+  const fallbackPoints = [0, 0, 0, 0, 0, 0, 0];
+  const hasSeries = Boolean(series && Object.keys(series).length > 0);
+  const safeSeries: Record<string, { labels?: number[] | string[]; points?: number[] }> = series || {};
+
   const seriesPoints = (key: string): number[] => {
-    const raw = series[key]?.points;
-    if (!Array.isArray(raw)) {
-      return [];
+    if (!hasSeries) {
+      return fallbackPoints;
     }
-    return raw.map((value) => (typeof value === 'number' && Number.isFinite(value) ? value : 0));
+    const raw = safeSeries[key]?.points;
+    if (!Array.isArray(raw)) {
+      return fallbackPoints;
+    }
+    const normalized = raw.map((value) => (typeof value === 'number' && Number.isFinite(value) ? value : 0));
+    return normalized.length > 0 ? normalized : fallbackPoints;
   };
 
   const metrics = [
@@ -217,6 +222,7 @@ function AnalyticsSummary({ dashboard }: { dashboard: AdminDashboardData }) {
 
   return (
     <View style={{ marginTop: 10 }}>
+      {!hasSeries ? <Text style={styles.mutedText}>Analytics source is syncing. Showing baseline timeline.</Text> : null}
       <View style={styles.wrapRow}>
         {metrics.map((metric) => (
           <ChoicePill
