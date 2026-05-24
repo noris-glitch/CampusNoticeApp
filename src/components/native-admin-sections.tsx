@@ -1,10 +1,12 @@
 import * as DocumentPicker from 'expo-document-picker';
 import * as Location from 'expo-location';
 import * as WebBrowser from 'expo-web-browser';
+import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import React, { useDeferredValue, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -342,6 +344,22 @@ export function CreateNoticeSection({
     (department) =>
       facultyTarget === null || department.faculty_id === facultyTarget || department.faculty_id === null
   );
+  const audienceRoleOptions = metadata?.audience_roles || {};
+  const selectedFacultyName =
+    facultyTarget === null
+      ? 'All faculties'
+      : metadata?.faculties.find((faculty) => faculty.id === facultyTarget)?.name || 'Selected faculty';
+  const selectedDepartmentName =
+    departmentTarget === null
+      ? 'All departments'
+      : visibleDepartments.find((department) => department.id === departmentTarget)?.name || 'Selected department';
+  const selectedRoleLabel =
+    selectedAudienceRoles.length === 0
+      ? 'All roles'
+      : selectedAudienceRoles.map((role) => audienceRoleOptions[role] || role).join(', ');
+  const audienceSummary = `${selectedFacultyName} · ${selectedDepartmentName} · ${
+    yearTarget === null ? 'All years' : `Year ${yearTarget}`
+  } · ${selectedRoleLabel}`;
 
   useEffect(() => {
     if (departmentTarget === null) {
@@ -485,7 +503,20 @@ export function CreateNoticeSection({
         year_target: yearTarget,
       });
 
-      Alert.alert('Notice', response.message || 'Notice saved successfully.');
+      let feedbackMessage = response.message || 'Notice saved successfully.';
+      if (response.status === 'published') {
+        const recipientCount = response.delivery_summary?.users ?? 0;
+        feedbackMessage =
+          recipientCount > 0
+            ? `Notice published to ${recipientCount} user${recipientCount === 1 ? '' : 's'}.`
+            : 'Notice was published, but no matching users can see it. Check faculty, department, year, and audience roles.';
+      } else if (response.status === 'scheduled') {
+        feedbackMessage = 'Notice scheduled successfully. Students will see it at the selected publish time.';
+      } else if (response.status === 'pending_review') {
+        feedbackMessage = 'Notice sent for review successfully.';
+      }
+
+      Alert.alert('Notice', feedbackMessage);
       resetNoticeForm();
       onDirty();
     } catch (saveError) {
@@ -595,21 +626,22 @@ export function CreateNoticeSection({
             );
           })}
         </View>
-        <Text style={styles.label}>Schedule publish at</Text>
-        <TextInput
-          placeholder="YYYY-MM-DD HH:MM"
-          placeholderTextColor={palette.muted}
-          style={styles.input}
+        <Text style={styles.helperText}>Audience summary: {audienceSummary}</Text>
+        <DateSelectionField
+          helper="Leave this blank to publish immediately."
+          label="Schedule publish at"
+          mode="datetime"
+          onChange={setScheduleDate}
+          placeholder="Select publish date & time"
           value={scheduleDate}
-          onChangeText={setScheduleDate}
         />
-        <Text style={styles.label}>Expiry date</Text>
-        <TextInput
-          placeholder="YYYY-MM-DD"
-          placeholderTextColor={palette.muted}
-          style={styles.input}
+        <DateSelectionField
+          helper="Optional. The notice stays visible until the end of the selected day."
+          label="Expiry date"
+          mode="date"
+          onChange={setExpireDate}
+          placeholder="Select expiry date"
           value={expireDate}
-          onChangeText={setExpireDate}
         />
         <Text style={styles.label}>Attachment</Text>
         <Pressable style={styles.filePicker} onPress={() => void pickAttachment()}>
@@ -620,16 +652,14 @@ export function CreateNoticeSection({
         <ToggleRow label="Pin this notice" value={pinned} onValueChange={setPinned} />
         <ToggleRow label="Requires acknowledgement" value={requiresAck} onValueChange={setRequiresAck} />
         {requiresAck ? (
-          <>
-            <Text style={styles.label}>Acknowledgement deadline</Text>
-            <TextInput
-              placeholder="YYYY-MM-DD HH:MM"
-              placeholderTextColor={palette.muted}
-              style={styles.input}
-              value={ackDate}
-              onChangeText={setAckDate}
-            />
-          </>
+          <DateSelectionField
+            helper="Students must acknowledge the notice before this time."
+            label="Acknowledgement deadline"
+            mode="datetime"
+            onChange={setAckDate}
+            placeholder="Select acknowledgement deadline"
+            value={ackDate}
+          />
         ) : null}
         <ToggleRow label="In-app delivery" value={inAppChannel} onValueChange={setInAppChannel} />
         <ToggleRow label="Email delivery" value={emailChannel} onValueChange={setEmailChannel} />
@@ -694,21 +724,20 @@ export function CreateNoticeSection({
               value={radiusKm}
               onChangeText={setRadiusKm}
             />
-            <Text style={styles.label}>Event start</Text>
-            <TextInput
-              placeholder="YYYY-MM-DD HH:MM"
-              placeholderTextColor={palette.muted}
-              style={styles.input}
+            <DateSelectionField
+              helper="Optional, but recommended for map-enabled events."
+              label="Event start"
+              mode="datetime"
+              onChange={setEventDate}
+              placeholder="Select event start"
               value={eventDate}
-              onChangeText={setEventDate}
             />
-            <Text style={styles.label}>Event end</Text>
-            <TextInput
-              placeholder="YYYY-MM-DD HH:MM"
-              placeholderTextColor={palette.muted}
-              style={styles.input}
+            <DateSelectionField
+              label="Event end"
+              mode="datetime"
+              onChange={setEventEndDate}
+              placeholder="Select event end"
               value={eventEndDate}
-              onChangeText={setEventEndDate}
             />
           </>
         ) : null}
@@ -839,6 +868,154 @@ function ActionButton({
   );
 }
 
+function padDatePart(value: number) {
+  return String(value).padStart(2, '0');
+}
+
+function parseApiDateInput(value?: string | null): Date | null {
+  if (!value) {
+    return null;
+  }
+
+  const [datePart, timePart = '00:00:00'] = value.trim().split(' ');
+  const [year, month, day] = datePart.split('-').map((item) => Number(item));
+  const [hours = 0, minutes = 0] = timePart.split(':').map((item) => Number(item));
+
+  if (
+    Number.isNaN(year) ||
+    Number.isNaN(month) ||
+    Number.isNaN(day) ||
+    Number.isNaN(hours) ||
+    Number.isNaN(minutes)
+  ) {
+    return null;
+  }
+
+  return new Date(year, month - 1, day, hours, minutes, 0, 0);
+}
+
+function formatApiDate(value: Date) {
+  return `${value.getFullYear()}-${padDatePart(value.getMonth() + 1)}-${padDatePart(value.getDate())}`;
+}
+
+function formatApiDateTime(value: Date) {
+  return `${formatApiDate(value)} ${padDatePart(value.getHours())}:${padDatePart(value.getMinutes())}`;
+}
+
+function formatPickerLabel(value: string, mode: 'date' | 'datetime', placeholder: string) {
+  const parsed = parseApiDateInput(value);
+  if (!parsed) {
+    return placeholder;
+  }
+
+  if (mode === 'date') {
+    return parsed.toLocaleDateString('en-KE', {
+      day: 'numeric',
+      month: 'short',
+      weekday: 'short',
+      year: 'numeric',
+    });
+  }
+
+  return parsed.toLocaleString('en-KE', {
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+function openPickerField(options: {
+  mode: 'date' | 'datetime';
+  onChange: (value: string) => void;
+  placeholder: string;
+  value: string;
+}) {
+  if (Platform.OS !== 'android') {
+    Alert.alert('Date and time', 'This picker is currently available on Android builds.');
+    return;
+  }
+
+  const initialValue = parseApiDateInput(options.value) || new Date();
+
+  DateTimePickerAndroid.open({
+    is24Hour: true,
+    mode: 'date',
+    value: initialValue,
+    onChange: (dateEvent, selectedDate) => {
+      if (dateEvent.type !== 'set' || !selectedDate) {
+        return;
+      }
+
+      if (options.mode === 'date') {
+        selectedDate.setHours(0, 0, 0, 0);
+        options.onChange(formatApiDate(selectedDate));
+        return;
+      }
+
+      const seededTime = parseApiDateInput(options.value) || selectedDate;
+      const timeBase = new Date(selectedDate);
+      timeBase.setHours(seededTime.getHours(), seededTime.getMinutes(), 0, 0);
+
+      DateTimePickerAndroid.open({
+        is24Hour: true,
+        mode: 'time',
+        value: timeBase,
+        onChange: (timeEvent, selectedTime) => {
+          if (timeEvent.type !== 'set' || !selectedTime) {
+            return;
+          }
+
+          const nextValue = new Date(selectedDate);
+          nextValue.setHours(selectedTime.getHours(), selectedTime.getMinutes(), 0, 0);
+          options.onChange(formatApiDateTime(nextValue));
+        },
+      });
+    },
+  });
+}
+
+function DateSelectionField({
+  helper,
+  label,
+  mode,
+  onChange,
+  placeholder,
+  value,
+}: {
+  helper?: string;
+  label: string;
+  mode: 'date' | 'datetime';
+  onChange: (value: string) => void;
+  placeholder: string;
+  value: string;
+}) {
+  const hasValue = value.trim() !== '';
+
+  return (
+    <>
+      <Text style={styles.label}>{label}</Text>
+      <View style={styles.selectionRow}>
+        <Pressable
+          style={[styles.input, styles.selectionField]}
+          onPress={() => openPickerField({ mode, onChange, placeholder, value })}
+        >
+          <Text style={hasValue ? styles.selectionValue : styles.selectionPlaceholder}>
+            {formatPickerLabel(value, mode, placeholder)}
+          </Text>
+        </Pressable>
+        {hasValue ? (
+          <Pressable style={styles.clearButton} onPress={() => onChange('')}>
+            <Text style={styles.clearButtonText}>Clear</Text>
+          </Pressable>
+        ) : null}
+      </View>
+      {helper ? <Text style={styles.helperText}>{helper}</Text> : null}
+    </>
+  );
+}
+
 function LoadingState({ label }: { label: string }) {
   return (
     <View style={styles.stateCard}>
@@ -922,6 +1099,20 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '900',
     marginTop: 12,
+  },
+  clearButton: {
+    alignItems: 'center',
+    alignSelf: 'stretch',
+    backgroundColor: '#edf3f9',
+    borderRadius: 14,
+    justifyContent: 'center',
+    marginTop: 8,
+    paddingHorizontal: 14,
+  },
+  clearButtonText: {
+    color: palette.navy,
+    fontSize: 13,
+    fontWeight: '800',
   },
   filePicker: {
     backgroundColor: '#edf3f9',
@@ -1046,6 +1237,23 @@ const styles = StyleSheet.create({
     backgroundColor: palette.card,
     borderRadius: 22,
     padding: 18,
+  },
+  selectionField: {
+    flex: 1,
+  },
+  selectionPlaceholder: {
+    color: palette.muted,
+    fontSize: 15,
+  },
+  selectionRow: {
+    alignItems: 'stretch',
+    flexDirection: 'row',
+    gap: 10,
+  },
+  selectionValue: {
+    color: palette.ink,
+    fontSize: 15,
+    fontWeight: '600',
   },
   sectionContent: {
     backgroundColor: palette.bg,
