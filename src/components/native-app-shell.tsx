@@ -399,6 +399,7 @@ function getMenuSections(
         heading: 'Main',
         items: [
           { icon: '🏠', key: 'feed', label: 'Home feed' },
+          { icon: '🚨', key: 'emergency', label: 'Emergency alerts' },
           {
             badge: unreadNotifications > 0 ? unreadNotifications : undefined,
             icon: '🔔',

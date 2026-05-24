@@ -285,6 +285,7 @@ export function EmergencyAlertsSection({ isActive, onDirty, refreshToken, sessio
   const [targetFaculty, setTargetFaculty] = useState<number | null>(null);
   const [targetYear, setTargetYear] = useState<number | null>(null);
   const [expiresAt, setExpiresAt] = useState('');
+  const canCreateAlerts = response?.can_create ?? (session.role === 'super_admin');
 
   useEffect(() => {
     if (!isActive) {
@@ -357,8 +358,12 @@ export function EmergencyAlertsSection({ isActive, onDirty, refreshToken, sessio
   return (
     <ScrollView contentContainerStyle={styles.screen}>
       <SectionIntro
-        title="Emergency alert"
-        subtitle="Send urgent campus-wide or targeted emergency notices to students."
+        title="Emergency alerts"
+        subtitle={
+          canCreateAlerts
+            ? 'Send urgent campus-wide or targeted emergency notices to students.'
+            : 'See urgent campus alerts posted by super administrators.'
+        }
       />
 
       {response ? (
@@ -368,66 +373,70 @@ export function EmergencyAlertsSection({ isActive, onDirty, refreshToken, sessio
         </View>
       ) : null}
 
-      <Panel>
-        <Text style={styles.sectionTitle}>Create emergency alert</Text>
-        <Text style={styles.label}>Title</Text>
-        <TextInput style={styles.input} value={title} onChangeText={setTitle} />
-        <Text style={styles.label}>Message</Text>
-        <TextInput multiline style={[styles.input, styles.textArea]} value={message} onChangeText={setMessage} />
-        <Text style={styles.label}>Severity</Text>
-        <View style={styles.wrapRow}>
-          {Object.keys(response?.severities || { critical: 'Critical', high: 'High', medium: 'Medium', low: 'Low' }).map((item) => (
-            <ChoicePill key={item} active={severity === item} label={item} onPress={() => setSeverity(item)} />
-          ))}
-        </View>
-        <Text style={styles.label}>Target faculty</Text>
-        <View style={styles.wrapRow}>
-          <ChoicePill active={targetFaculty === null} label="All faculties" onPress={() => setTargetFaculty(null)} />
-          {(response?.faculties || []).map((faculty) => (
-            <ChoicePill
-              key={faculty.id}
-              active={targetFaculty === faculty.id}
-              label={faculty.name}
-              onPress={() => setTargetFaculty(faculty.id)}
-            />
-          ))}
-        </View>
-        <Text style={styles.label}>Target year</Text>
-        <View style={styles.wrapRow}>
-          <ChoicePill active={targetYear === null} label="All years" onPress={() => setTargetYear(null)} />
-          {(response?.years || []).map((yearOption) => (
-            <ChoicePill
-              key={yearOption.value}
-              active={targetYear === yearOption.value}
-              label={yearOption.label}
-              onPress={() => setTargetYear(yearOption.value)}
-            />
-          ))}
-        </View>
-        <Text style={styles.label}>Expires at</Text>
-        <TextInput
-          placeholder="YYYY-MM-DD HH:MM"
-          placeholderTextColor={palette.muted}
-          style={styles.input}
-          value={expiresAt}
-          onChangeText={setExpiresAt}
-        />
-        <ActionButton
-          disabled={saving}
-          label={saving ? 'Sending...' : 'Send emergency alert'}
-          onPress={() => void submit()}
-          tone="danger"
-        />
-      </Panel>
+      {canCreateAlerts ? (
+        <Panel>
+          <Text style={styles.sectionTitle}>Create emergency alert</Text>
+          <Text style={styles.label}>Title</Text>
+          <TextInput style={styles.input} value={title} onChangeText={setTitle} />
+          <Text style={styles.label}>Message</Text>
+          <TextInput multiline style={[styles.input, styles.textArea]} value={message} onChangeText={setMessage} />
+          <Text style={styles.label}>Severity</Text>
+          <View style={styles.wrapRow}>
+            {Object.keys(response?.severities || { critical: 'Critical', high: 'High', medium: 'Medium', low: 'Low' }).map((item) => (
+              <ChoicePill key={item} active={severity === item} label={item} onPress={() => setSeverity(item)} />
+            ))}
+          </View>
+          <Text style={styles.label}>Target faculty</Text>
+          <View style={styles.wrapRow}>
+            <ChoicePill active={targetFaculty === null} label="All faculties" onPress={() => setTargetFaculty(null)} />
+            {(response?.faculties || []).map((faculty) => (
+              <ChoicePill
+                key={faculty.id}
+                active={targetFaculty === faculty.id}
+                label={faculty.name}
+                onPress={() => setTargetFaculty(faculty.id)}
+              />
+            ))}
+          </View>
+          <Text style={styles.label}>Target year</Text>
+          <View style={styles.wrapRow}>
+            <ChoicePill active={targetYear === null} label="All years" onPress={() => setTargetYear(null)} />
+            {(response?.years || []).map((yearOption) => (
+              <ChoicePill
+                key={yearOption.value}
+                active={targetYear === yearOption.value}
+                label={yearOption.label}
+                onPress={() => setTargetYear(yearOption.value)}
+              />
+            ))}
+          </View>
+          <Text style={styles.label}>Expires at</Text>
+          <TextInput
+            placeholder="YYYY-MM-DD HH:MM"
+            placeholderTextColor={palette.muted}
+            style={styles.input}
+            value={expiresAt}
+            onChangeText={setExpiresAt}
+          />
+          <ActionButton
+            disabled={saving}
+            label={saving ? 'Sending...' : 'Send emergency alert'}
+            onPress={() => void submit()}
+            tone="danger"
+          />
+        </Panel>
+      ) : null}
 
       {loading ? <LoadingState label="Loading emergency alerts..." /> : null}
       {error ? <ErrorState message={error} /> : null}
 
       {!loading && !error && response ? (
         <Panel>
-          <Text style={styles.sectionTitle}>Recent emergency alerts</Text>
+          <Text style={styles.sectionTitle}>{canCreateAlerts ? 'Recent emergency alerts' : 'Active emergency alerts'}</Text>
           {response.alerts.length === 0 ? (
-            <Text style={styles.helperText}>No emergency alerts have been sent yet.</Text>
+            <Text style={styles.helperText}>
+              {canCreateAlerts ? 'No emergency alerts have been sent yet.' : 'There are no active emergency alerts for you right now.'}
+            </Text>
           ) : (
             response.alerts.map((alertItem: EmergencyAlertItem) => (
               <View key={alertItem.id} style={styles.listCard}>
@@ -440,9 +449,11 @@ export function EmergencyAlertsSection({ isActive, onDirty, refreshToken, sessio
                 <Text style={styles.metaText}>
                   {alertItem.author_name || 'System'} · {formatDateLabel(alertItem.created_at)}
                 </Text>
-                <Text style={styles.metaText}>
-                  Read by {alertItem.read_count}/{alertItem.total_recipients} students
-                </Text>
+                {canCreateAlerts ? (
+                  <Text style={styles.metaText}>
+                    Read by {alertItem.read_count}/{alertItem.total_recipients} students
+                  </Text>
+                ) : null}
                 <Text style={styles.metaText}>Expires: {formatDateLabel(alertItem.expires_at)}</Text>
               </View>
             ))

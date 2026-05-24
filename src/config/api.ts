@@ -392,6 +392,7 @@ export interface EmergencyAlertItem {
 export interface EmergencyAlertsResponse {
   active_count: number;
   alerts: EmergencyAlertItem[];
+  can_create?: boolean;
   faculties: FacultyOption[];
   severities: Record<string, string>;
   success: boolean;
@@ -1242,7 +1243,8 @@ export async function updateManagedUser(
   }
 ): Promise<SimpleSuccessResponse> {
   return postRequest<SimpleSuccessResponse>(API_PATHS.manageUsers, {
-    ...authParams(user),
+    auth_user_id: user.user_id,
+    token: user.token,
     ...payload,
     action: 'update',
   });
@@ -1250,7 +1252,8 @@ export async function updateManagedUser(
 
 export async function deleteManagedUser(user: StoredUser, userId: number): Promise<SimpleSuccessResponse> {
   return postRequest<SimpleSuccessResponse>(API_PATHS.manageUsers, {
-    ...authParams(user),
+    auth_user_id: user.user_id,
+    token: user.token,
     action: 'delete',
     user_id: userId,
   });
