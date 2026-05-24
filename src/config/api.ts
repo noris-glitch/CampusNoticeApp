@@ -222,6 +222,18 @@ export interface StudentDashboardData {
 }
 
 export interface AdminDashboardData {
+  analytics?: {
+    range: 'daily' | 'monthly' | 'weekly';
+    series: {
+      active_users: { labels: string[]; points: number[] };
+      logins: { labels: string[]; points: number[] };
+      notice_comments: { labels: string[]; points: number[] };
+      notice_downloads: { labels: string[]; points: number[] };
+      notices_posted: { labels: string[]; points: number[] };
+      notices_viewed: { labels: string[]; points: number[] };
+      notifications_read: { labels: string[]; points: number[] };
+    };
+  };
   open_questions: number;
   pending_approvals: number;
   recent_notices: NoticeItem[];
@@ -236,6 +248,29 @@ export interface AdminDashboardData {
   total_notices: number;
   total_students: number;
   total_views: number;
+  reports?: {
+    department_activity: Array<{
+      engagements: number;
+      id: number;
+      name: string;
+      notice_comments: number;
+      notice_views: number;
+      notices_posted: number;
+    }>;
+    most_viewed_notices: Array<{ id: number; title: string; views: number }>;
+    total_notices_posted: number;
+    updated_at: string;
+    user_engagement: Array<{
+      bookmarks: number;
+      comments: number;
+      email: string;
+      id: number;
+      interactions: number;
+      name: string;
+      views: number;
+    }>;
+    views_per_notice: Array<{ id: number; title: string; views: number }>;
+  };
 }
 
 export interface BootstrapResponse {
@@ -921,8 +956,14 @@ export async function updateFeedbackStatus(
   });
 }
 
-export async function fetchBootstrap(user: StoredUser): Promise<BootstrapResponse> {
-  return getRequest<BootstrapResponse>(API_PATHS.bootstrap, authParams(user));
+export async function fetchBootstrap(
+  user: StoredUser,
+  analyticsRange?: 'daily' | 'monthly' | 'weekly'
+): Promise<BootstrapResponse> {
+  return getRequest<BootstrapResponse>(API_PATHS.bootstrap, {
+    ...authParams(user),
+    analytics_range: analyticsRange,
+  });
 }
 
 export async function fetchNotices(user: StoredUser): Promise<NoticeItem[]> {

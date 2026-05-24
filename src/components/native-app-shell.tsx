@@ -269,7 +269,14 @@ export default function NativeAppShell({
               session={session}
             />
           ) : null}
-          {activeScreen === 'dashboard' ? <AdminDashboardSection dashboard={adminDashboard || null} /> : null}
+          {activeScreen === 'dashboard' ? (
+            <AdminDashboardSection
+              dashboard={adminDashboard || null}
+              isActive
+              refreshToken={refreshToken}
+              session={session}
+            />
+          ) : null}
           {activeScreen === 'manage' ? (
             <ManageNoticesSection
               isActive

@@ -19,6 +19,7 @@ import {
 import {
   AdminDashboardData,
   createAdminNotice,
+  fetchBootstrap,
   fetchNoticeDetail,
   fetchAdminNotices,
   getApiErrorMessage,
@@ -55,10 +56,52 @@ interface CreateNoticeSectionProps extends BaseProps {
 }
 
 export function AdminDashboardSection({
-  dashboard,
+  dashboard: initialDashboard,
+  isActive = true,
+  refreshToken = 0,
+  session,
 }: {
   dashboard?: AdminDashboardData | null;
+  isActive?: boolean;
+  refreshToken?: number;
+  session: StoredUser;
 }) {
+  const [range, setRange] = useState<'daily' | 'monthly' | 'weekly'>('weekly');
+  const [dashboard, setDashboard] = useState<AdminDashboardData | null>(initialDashboard || null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setDashboard(initialDashboard || null);
+  }, [initialDashboard]);
+
+  useEffect(() => {
+    if (!isActive) {
+      return;
+    }
+
+    let isMounted = true;
+    async function loadAnalytics() {
+      setLoading(true);
+      try {
+        const response = await fetchBootstrap(session, range);
+        if (isMounted && response.dashboard) {
+          setDashboard(response.dashboard as AdminDashboardData);
+        }
+      } catch {
+        // Preserve the most recent working dashboard snapshot.
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void loadAnalytics();
+    return () => {
+      isMounted = false;
+    };
+  }, [isActive, range, refreshToken, session]);
+
   if (!dashboard) {
     return (
       <ScrollView contentContainerStyle={styles.sectionContent}>
@@ -73,6 +116,16 @@ export function AdminDashboardSection({
   return (
     <ScrollView contentContainerStyle={styles.sectionContent}>
       <SectionIntro title="Dashboard" subtitle="Your role-based university control center." />
+      <Panel>
+        <Text style={styles.sectionTitle}>Analytics trend</Text>
+        <View style={styles.wrapRow}>
+          {(['daily', 'weekly', 'monthly'] as const).map((option) => (
+            <ChoicePill key={option} active={range === option} label={option} onPress={() => setRange(option)} />
+          ))}
+        </View>
+        {loading ? <Text style={styles.mutedText}>Refreshing analytics...</Text> : null}
+        {dashboard.analytics?.series ? <AnalyticsSummary dashboard={dashboard} /> : null}
+      </Panel>
 
       <View style={styles.metricGrid}>
         <MetricCard label="Notices" value={dashboard.total_notices} />
@@ -82,6 +135,27 @@ export function AdminDashboardSection({
         <MetricCard label="Pending" value={dashboard.pending_approvals} />
         <MetricCard label="Questions" value={dashboard.open_questions} />
       </View>
+
+      <Panel>
+        <Text style={styles.sectionTitle}>Reports</Text>
+        <Text style={styles.listMeta}>Total notices posted: {dashboard.reports?.total_notices_posted || 0}</Text>
+        <Text style={[styles.listMeta, { marginTop: 4 }]}>Most viewed notices</Text>
+        {(dashboard.reports?.most_viewed_notices || []).slice(0, 5).map((notice, index) => (
+          <View key={notice.id} style={styles.listRow}>
+            <Text style={styles.listTitle}>{index + 1}. {notice.title}</Text>
+            <Text style={styles.listMeta}>{notice.views} views</Text>
+          </View>
+        ))}
+        <Text style={[styles.listMeta, { marginTop: 8 }]}>Department activity</Text>
+        {(dashboard.reports?.department_activity || []).slice(0, 5).map((department) => (
+          <View key={department.id} style={styles.listRow}>
+            <Text style={styles.listTitle}>{department.name}</Text>
+            <Text style={styles.listMeta}>
+              {department.notices_posted} notices · {department.engagements} engagements
+            </Text>
+          </View>
+        ))}
+      </Panel>
 
       <Panel>
         <Text style={styles.sectionTitle}>Recent notices</Text>
@@ -112,6 +186,46 @@ export function AdminDashboardSection({
       </Panel>
     </ScrollView>
   );
+}
+
+function AnalyticsSummary({ dashboard }: { dashboard: AdminDashboardData }) {
+  const series = dashboard.analytics?.series;
+  if (!series) {
+    return <Text style={styles.mutedText}>No analytics data yet.</Text>;
+  }
+
+  const metrics = [
+    { key: 'logins', label: 'Logins', points: series.logins.points },
+    { key: 'notices_viewed', label: 'Views', points: series.notices_viewed.points },
+    { key: 'notices_posted', label: 'Posted', points: series.notices_posted.points },
+    { key: 'notice_downloads', label: 'Downloads', points: series.notice_downloads.points },
+    { key: 'notice_comments', label: 'Comments', points: series.notice_comments.points },
+    { key: 'active_users', label: 'Active users', points: series.active_users.points },
+    { key: 'notifications_read', label: 'Notif read', points: series.notifications_read.points },
+  ];
+
+  return (
+    <View style={{ marginTop: 10 }}>
+      {metrics.map((metric) => (
+        <View key={metric.key} style={styles.listRow}>
+          <Text style={styles.listTitle}>{metric.label}</Text>
+          <Text style={styles.listMeta}>{drawSparkline(metric.points)} ({metric.points.reduce((a, b) => a + b, 0)})</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function drawSparkline(points: number[]): string {
+  if (points.length === 0) {
+    return '-';
+  }
+
+  const ticks = ['▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
+  const max = Math.max(...points, 1);
+  return points
+    .map((point) => ticks[Math.max(0, Math.min(ticks.length - 1, Math.round((point / max) * (ticks.length - 1))))])
+    .join('');
 }
 
 export function ManageNoticesSection({ isActive, onDirty, refreshToken, session }: BaseProps) {

@@ -313,6 +313,7 @@ function NoticeCard({
       <View style={styles.inlineRowWrap}>
         <Text style={styles.metaText}>{notice.author_name || 'Campus admin'}</Text>
         <Text style={styles.metaText}>{formatDateLabel(notice.publish_at || notice.created_at)}</Text>
+        <Text style={styles.metaText}>{notice.view_count || 0} views</Text>
       </View>
       <View style={styles.actionRow}>
         {!readOnlyBookmark ? (
