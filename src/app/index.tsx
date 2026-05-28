@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   ImageBackground,
+  ImageSourcePropType,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -35,6 +36,8 @@ const colors = {
   warm: '#ff8a5b',
 };
 
+const defaultBackgroundImage = require('../../assets/images/tutorial-web.png') as ImageSourcePropType;
+
 export default function LoginScreen() {
   const params = useLocalSearchParams<{ email?: string }>();
   const router = useRouter();
@@ -45,6 +48,7 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [backgroundColor, setBackgroundColor] = useState('#17324D');
   const [backgroundImageUrl, setBackgroundImageUrl] = useState<string | null>(null);
+  const backgroundImageSource = backgroundImageUrl ? { uri: backgroundImageUrl } : defaultBackgroundImage;
 
   useEffect(() => {
     if (typeof params.email === 'string' && params.email.trim() !== '') {
@@ -213,13 +217,9 @@ export default function LoginScreen() {
 
   return (
     <View style={[styles.screenShell, { backgroundColor }]}>
-      {backgroundImageUrl ? (
-        <ImageBackground source={{ uri: backgroundImageUrl }} style={styles.backgroundImage} imageStyle={styles.backgroundImageLayer}>
-          <View style={styles.backgroundOverlay}>{authContent}</View>
-        </ImageBackground>
-      ) : (
-        authContent
-      )}
+      <ImageBackground source={backgroundImageSource} style={styles.backgroundImage} imageStyle={styles.backgroundImageLayer}>
+        <View style={styles.backgroundOverlay}>{authContent}</View>
+      </ImageBackground>
     </View>
   );
 }
@@ -358,6 +358,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   backgroundImageLayer: {
+    resizeMode: 'cover',
     opacity: 0.92,
   },
   backgroundOverlay: {
