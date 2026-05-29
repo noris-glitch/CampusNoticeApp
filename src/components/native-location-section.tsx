@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -11,7 +12,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import MapView, { Marker } from 'react-native-maps';
+import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 
 import {
   fetchLocationHub,
@@ -90,9 +91,10 @@ export default function LocationEventsSection({
     };
   }, [isActive, refreshToken, session]);
 
-  const hubEvents = Array.isArray(hub?.events) ? hub.events : [];
-  const nearbyEvents = Array.isArray(hub?.nearby_events) ? hub.nearby_events : [];
+  const hubEvents = normalizeEvents(hub?.events);
+  const nearbyEvents = normalizeEvents(hub?.nearby_events);
   const featuredEvents = nearbyEvents.length ? nearbyEvents : hubEvents;
+  const visibleFeaturedEvents = featuredEvents.slice(0, 12);
   const userLocation = hub?.user_location ?? null;
   const validMapEvents = hubEvents.filter(hasValidCoordinates);
   const userLocationCoordinates =
@@ -189,7 +191,7 @@ export default function LocationEventsSection({
             <View style={styles.locationCard}>
               <Text style={styles.locationTitle}>{hub.user_location.location_name || 'Shared location'}</Text>
               <Text style={styles.locationBody}>
-                {hub.user_location.location_address || `${hub.user_location.latitude.toFixed(5)}, ${hub.user_location.longitude.toFixed(5)}`}
+                {formatLocationLabel(hub.user_location)}
               </Text>
             </View>
           ) : null}
@@ -229,8 +231,10 @@ export default function LocationEventsSection({
               {hubEvents.length > 0 ? (
                 <View style={styles.mapFrame}>
                   <MapView
+                    provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
                     initialRegion={mapRegion}
                     loadingEnabled
+                    liteMode={Platform.OS === 'android'}
                     rotateEnabled={false}
                     scrollEnabled
                     showsCompass
@@ -290,12 +294,12 @@ export default function LocationEventsSection({
                   </Text>
                 </View>
               ) : (
-                featuredEvents.map((event) => (
+                visibleFeaturedEvents.map((event) => (
                   <View key={event.id} style={styles.eventCard}>
                     <View style={styles.tagRow}>
                       <Text style={styles.tag}>{event.category || 'Event'}</Text>
-                      {typeof event.distance === 'number' ? (
-                        <Text style={[styles.tag, styles.distanceTag]}>{event.distance.toFixed(1)} km away</Text>
+                      {formatDistanceLabel(event.distance) ? (
+                        <Text style={[styles.tag, styles.distanceTag]}>{formatDistanceLabel(event.distance)}</Text>
                       ) : null}
                     </View>
                     <Text style={styles.eventTitle}>{event.title}</Text>
@@ -313,6 +317,11 @@ export default function LocationEventsSection({
                   </View>
                 ))
               )}
+              {featuredEvents.length > visibleFeaturedEvents.length ? (
+                <Text style={styles.helper}>
+                  Showing the first {visibleFeaturedEvents.length} items. Open the campus map to narrow results.
+                </Text>
+              ) : null}
             </View>
           ) : null}
         </>
@@ -359,6 +368,29 @@ function formatDateLabel(value?: string | null) {
   return date.toLocaleString();
 }
 
+function formatLocationLabel(userLocation: LocationHubResponse['user_location']) {
+  if (!userLocation) {
+    return 'Campus location';
+  }
+
+  if (userLocation.location_address) {
+    return userLocation.location_address;
+  }
+
+  const latitude = isValidCoordinate(userLocation.latitude) ? userLocation.latitude.toFixed(5) : null;
+  const longitude = isValidCoordinate(userLocation.longitude) ? userLocation.longitude.toFixed(5) : null;
+
+  if (latitude && longitude) {
+    return `${latitude}, ${longitude}`;
+  }
+
+  return userLocation.location_name || 'Campus location';
+}
+
+function formatDistanceLabel(distance?: number | null) {
+  return Number.isFinite(distance as number) ? `${(distance as number).toFixed(1)} km away` : null;
+}
+
 function getInitialRegion(
   userLocation: LocationHubResponse['user_location'],
   events: LocationEventItem[]
@@ -388,6 +420,14 @@ function hasValidCoordinates(
   event: LocationEventItem
 ): event is LocationEventItem & { latitude: number; longitude: number } {
   return isValidCoordinate(event.latitude) && isValidCoordinate(event.longitude);
+}
+
+function normalizeEvents(value: unknown): LocationEventItem[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter((item): item is LocationEventItem => typeof item === 'object' && item !== null);
 }
 
 const styles = StyleSheet.create({

@@ -19,7 +19,6 @@ import {
   loadLandingPageCache,
   fetchPublicSettings,
   getApiErrorMessage,
-  landingAppLogoUrl,
   landingBackgroundUrl,
   loadSession,
   loginWithPassword,
@@ -49,10 +48,9 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [backgroundColor, setBackgroundColor] = useState('#17324D');
   const [backgroundImageUrl, setBackgroundImageUrl] = useState<string | null>(null);
-  const [appLogoUrl, setAppLogoUrl] = useState<string | null>(null);
   const [landingSettingsReady, setLandingSettingsReady] = useState(false);
   const backgroundImageSource = backgroundImageUrl ? { uri: backgroundImageUrl } : null;
-  const appLogoSource = appLogoUrl ? { uri: appLogoUrl } : require('../../assets/images/icon.png');
+  const appLogoSource = require('../../assets/images/icon.png');
 
   useEffect(() => {
     if (typeof params.email === 'string' && params.email.trim() !== '') {
@@ -91,7 +89,6 @@ export default function LoginScreen() {
       if (isMounted && cached) {
         setBackgroundColor(cached.background_color || '#17324D');
         setBackgroundImageUrl(landingBackgroundUrl(cached.background_image_url, cached.background_image));
-        setAppLogoUrl(landingAppLogoUrl(cached.app_logo_url, cached.app_logo));
         setLandingSettingsReady(true);
       }
 
@@ -101,18 +98,14 @@ export default function LoginScreen() {
           response.landing_page.background_image_url,
           response.landing_page.background_image
         );
-        const nextLogo = landingAppLogoUrl(response.landing_page.app_logo_url, response.landing_page.app_logo);
 
         setBackgroundColor(nextColor);
         setBackgroundImageUrl(nextImage || null);
-        setAppLogoUrl(nextLogo || null);
         setLandingSettingsReady(true);
         void saveLandingPageCache({
           background_color: nextColor,
           background_image: response.landing_page.background_image,
           background_image_url: response.landing_page.background_image_url,
-          app_logo: response.landing_page.app_logo,
-          app_logo_url: response.landing_page.app_logo_url,
         });
       };
 
@@ -141,7 +134,6 @@ export default function LoginScreen() {
       if (isMounted) {
         setBackgroundColor('#17324D');
         setBackgroundImageUrl(null);
-        setAppLogoUrl(null);
         setLandingSettingsReady(true);
       }
     }

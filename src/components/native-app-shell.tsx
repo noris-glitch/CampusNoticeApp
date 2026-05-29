@@ -25,7 +25,6 @@ import {
   BootstrapResponse,
   fetchBootstrap,
   getApiErrorMessage,
-  landingAppLogoUrl,
   saveSession,
   StoredUser,
   StudentDashboardData,
@@ -142,8 +141,7 @@ export default function NativeAppShell({
     session.role === 'student' ? (bootstrap?.dashboard as StudentDashboardData | undefined) : undefined;
   const adminDashboard =
     session.role !== 'student' ? (bootstrap?.dashboard as AdminDashboardData | undefined) : undefined;
-  const appLogoUrl = landingAppLogoUrl(bootstrap?.landing_page?.app_logo_url, bootstrap?.landing_page?.app_logo);
-  const appLogoSource = appLogoUrl ? { uri: appLogoUrl } : require('../../assets/images/icon.png');
+  const appLogoSource = require('../../assets/images/icon.png');
 
   return (
     <SafeAreaView
@@ -189,7 +187,8 @@ export default function NativeAppShell({
       ) : null}
 
       {!loading && !error ? (
-        <View style={[styles.body, isDark ? styles.bodyDark : null]}>
+        <ScreenErrorBoundary>
+          <View style={[styles.body, isDark ? styles.bodyDark : null]}>
           {activeScreen === 'feed' ? (
             <StudentFeedSection
               categories={bootstrap?.categories || []}
@@ -354,7 +353,8 @@ export default function NativeAppShell({
             />
           ) : null}
           {activeScreen === 'help' ? <HelpSupportSection /> : null}
-        </View>
+          </View>
+        </ScreenErrorBoundary>
       ) : null}
 
       <Modal animationType="fade" onRequestClose={() => setMenuOpen(false)} transparent visible={menuOpen}>
@@ -401,6 +401,32 @@ export default function NativeAppShell({
       </Modal>
     </SafeAreaView>
   );
+}
+
+class ScreenErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean }
+> {
+  state = { hasError: false };
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  override render() {
+    if (this.state.hasError) {
+      return (
+        <View style={styles.centerState}>
+          <Text style={styles.errorTitle}>This section hit a problem</Text>
+          <Text style={styles.errorText}>
+            Please go back, reopen the nearby screen, or refresh the app. The rest of your workspace stays available.
+          </Text>
+        </View>
+      );
+    }
+
+    return this.props.children;
+  }
 }
 
 function getDefaultScreen(role: StoredUser['role']): ScreenKey {
