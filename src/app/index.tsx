@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Alert,
   ImageBackground,
-  ImageSourcePropType,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -14,13 +13,16 @@ import {
   View,
 } from 'react-native';
 import { Href, useLocalSearchParams, useRouter } from 'expo-router';
+import { useColorScheme } from 'react-native';
 
 import {
+  loadLandingPageCache,
   fetchPublicSettings,
   getApiErrorMessage,
   landingBackgroundUrl,
   loadSession,
   loginWithPassword,
+  saveLandingPageCache,
   saveSession,
   warmUpServer,
 } from '@/config/api';
@@ -36,11 +38,10 @@ const colors = {
   warm: '#ff8a5b',
 };
 
-const defaultBackgroundImage = require('../../assets/images/tutorial-web.png') as ImageSourcePropType;
-
 export default function LoginScreen() {
   const params = useLocalSearchParams<{ email?: string }>();
   const router = useRouter();
+  const isDark = useColorScheme() === 'dark';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -48,7 +49,8 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [backgroundColor, setBackgroundColor] = useState('#17324D');
   const [backgroundImageUrl, setBackgroundImageUrl] = useState<string | null>(null);
-  const backgroundImageSource = backgroundImageUrl ? { uri: backgroundImageUrl } : defaultBackgroundImage;
+  const [landingSettingsReady, setLandingSettingsReady] = useState(false);
+  const backgroundImageSource = backgroundImageUrl ? { uri: backgroundImageUrl } : null;
 
   useEffect(() => {
     if (typeof params.email === 'string' && params.email.trim() !== '') {
@@ -83,14 +85,28 @@ export default function LoginScreen() {
     let isMounted = true;
 
     async function loadPublicSettings() {
+      const cached = await loadLandingPageCache().catch(() => null);
+      if (isMounted && cached) {
+        setBackgroundColor(cached.background_color || '#17324D');
+        setBackgroundImageUrl(landingBackgroundUrl(cached.background_image_url, cached.background_image));
+        setLandingSettingsReady(true);
+      }
+
       const applySettings = (response: Awaited<ReturnType<typeof fetchPublicSettings>>) => {
-        setBackgroundColor(response.landing_page.background_color || '#17324D');
-        setBackgroundImageUrl(
-          landingBackgroundUrl(
-            response.landing_page.background_image_url,
-            response.landing_page.background_image
-          ) || null
+        const nextColor = response.landing_page.background_color || '#17324D';
+        const nextImage = landingBackgroundUrl(
+          response.landing_page.background_image_url,
+          response.landing_page.background_image
         );
+
+        setBackgroundColor(nextColor);
+        setBackgroundImageUrl(nextImage || null);
+        setLandingSettingsReady(true);
+        void saveLandingPageCache({
+          background_color: nextColor,
+          background_image: response.landing_page.background_image,
+          background_image_url: response.landing_page.background_image_url,
+        });
       };
 
       await warmUpServer().catch(() => {
@@ -118,6 +134,7 @@ export default function LoginScreen() {
       if (isMounted) {
         setBackgroundColor('#17324D');
         setBackgroundImageUrl(null);
+        setLandingSettingsReady(true);
       }
     }
 
@@ -160,7 +177,7 @@ export default function LoginScreen() {
   const authContent = (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={styles.screen}
+      style={[styles.screen, isDark ? { backgroundColor: '#091421' } : null]}
     >
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <View style={styles.hero}>
@@ -171,31 +188,33 @@ export default function LoginScreen() {
           </Text>
         </View>
 
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Welcome back</Text>
-          <Text style={styles.cardSubtitle}>Use your email and password to continue.</Text>
+        <View style={[styles.card, isDark ? styles.cardDark : null]}>
+          <Text style={[styles.cardTitle, isDark ? styles.cardTitleDark : null]}>Welcome back</Text>
+          <Text style={[styles.cardSubtitle, isDark ? styles.cardSubtitleDark : null]}>
+            Use your email and password to continue.
+          </Text>
 
-          <Text style={styles.label}>Email address</Text>
+          <Text style={[styles.label, isDark ? styles.labelDark : null]}>Email address</Text>
           <TextInput
             autoCapitalize="none"
             autoCorrect={false}
             keyboardType="email-address"
             placeholder="you@jooust.ac.ke"
             placeholderTextColor={colors.muted}
-            style={styles.input}
+            style={[styles.input, isDark ? styles.inputDark : null]}
             value={email}
             onChangeText={setEmail}
           />
 
-          <Text style={styles.label}>Password</Text>
-          <View style={styles.passwordRow}>
+          <Text style={[styles.label, isDark ? styles.labelDark : null]}>Password</Text>
+          <View style={[styles.passwordRow, isDark ? styles.passwordRowDark : null]}>
             <TextInput
               autoCapitalize="none"
               autoCorrect={false}
               placeholder="Your password"
               placeholderTextColor={colors.muted}
               secureTextEntry={!showPassword}
-              style={styles.passwordInput}
+              style={[styles.passwordInput, isDark ? styles.passwordInputDark : null]}
               value={password}
               onChangeText={setPassword}
             />
@@ -226,9 +245,11 @@ export default function LoginScreen() {
             <Text style={styles.secondaryButtonText}>Create student account</Text>
           </Pressable>
 
-          <View style={styles.supportCard}>
-            <Text style={styles.supportTitle}>Need help getting in?</Text>
-            <Text style={styles.supportText}>
+          <View style={[styles.supportCard, isDark ? styles.supportCardDark : null]}>
+            <Text style={[styles.supportTitle, isDark ? styles.supportTitleDark : null]}>
+              Need help getting in?
+            </Text>
+            <Text style={[styles.supportText, isDark ? styles.supportTextDark : null]}>
               First login may take a few seconds if the Render backend is waking up. If you are an admin without an account, contact the system administrator.
             </Text>
           </View>
@@ -238,10 +259,21 @@ export default function LoginScreen() {
   );
 
   return (
-    <View style={[styles.screenShell, { backgroundColor }]}>
-      <ImageBackground source={backgroundImageSource} style={styles.backgroundImage} imageStyle={styles.backgroundImageLayer}>
-        <View style={styles.backgroundOverlay}>{authContent}</View>
-      </ImageBackground>
+    <View style={[styles.screenShell, { backgroundColor: isDark ? '#091421' : backgroundColor }]}>
+      {backgroundImageSource && landingSettingsReady ? (
+        <ImageBackground source={backgroundImageSource} style={styles.backgroundImage} imageStyle={styles.backgroundImageLayer}>
+          <View style={[styles.backgroundOverlay, isDark ? styles.backgroundOverlayDark : null]}>{authContent}</View>
+        </ImageBackground>
+      ) : (
+        <View
+          style={[
+            styles.backgroundFallback,
+            { backgroundColor: isDark ? '#091421' : backgroundColor },
+          ]}
+        >
+          <View style={[styles.backgroundOverlay, isDark ? styles.backgroundOverlayDark : null]}>{authContent}</View>
+        </View>
+      )}
     </View>
   );
 }
@@ -387,6 +419,12 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(9, 20, 33, 0.62)',
     flex: 1,
   },
+  backgroundOverlayDark: {
+    backgroundColor: 'rgba(5, 10, 18, 0.82)',
+  },
+  backgroundFallback: {
+    flex: 1,
+  },
   screen: {
     backgroundColor: 'transparent',
     flex: 1,
@@ -423,6 +461,11 @@ const styles = StyleSheet.create({
     marginTop: 18,
     padding: 16,
   },
+  supportCardDark: {
+    backgroundColor: '#0b1523',
+    borderColor: '#233548',
+    borderWidth: 1,
+  },
   supportText: {
     color: colors.muted,
     fontSize: 13,
@@ -434,11 +477,43 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '800',
   },
+  supportTitleDark: {
+    color: '#eff6ff',
+  },
+  supportTextDark: {
+    color: '#b8c8d9',
+  },
   title: {
     color: colors.ink,
     fontSize: 32,
     fontWeight: '900',
     lineHeight: 38,
     marginTop: 8,
+  },
+  cardDark: {
+    backgroundColor: '#0f1e30',
+    borderColor: '#233548',
+    borderWidth: 1,
+  },
+  cardTitleDark: {
+    color: '#f8fbff',
+  },
+  cardSubtitleDark: {
+    color: '#b8c8d9',
+  },
+  inputDark: {
+    backgroundColor: '#0b1523',
+    borderColor: '#233548',
+    color: '#f8fbff',
+  },
+  labelDark: {
+    color: '#c9d7e4',
+  },
+  passwordInputDark: {
+    color: '#f8fbff',
+  },
+  passwordRowDark: {
+    backgroundColor: '#0b1523',
+    borderColor: '#233548',
   },
 });

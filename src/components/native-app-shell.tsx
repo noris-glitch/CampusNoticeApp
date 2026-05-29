@@ -1,6 +1,7 @@
 import React, { startTransition, useEffect, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useColorScheme } from 'react-native';
 
 import { FeedbackInboxSection, StudentFeedbackSection } from '@/components/native-feedback-sections';
 import {
@@ -76,6 +77,7 @@ export default function NativeAppShell({
   onSessionUpdated: (user: StoredUser) => Promise<void> | void;
   session: StoredUser;
 }) {
+  const isDark = useColorScheme() === 'dark';
   const [activeScreen, setActiveScreen] = useState<ScreenKey>(getDefaultScreen(session.role));
   const [bootstrap, setBootstrap] = useState<BootstrapResponse | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -139,10 +141,13 @@ export default function NativeAppShell({
     session.role !== 'student' ? (bootstrap?.dashboard as AdminDashboardData | undefined) : undefined;
 
   return (
-    <SafeAreaView edges={['top', 'right', 'bottom', 'left']} style={styles.safeArea}>
-      <StatusBar barStyle="light-content" />
+    <SafeAreaView
+      edges={['top', 'right', 'bottom', 'left']}
+      style={[styles.safeArea, isDark ? styles.safeAreaDark : null]}
+    >
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
-      <View style={styles.header}>
+      <View style={[styles.header, isDark ? styles.headerDark : null]}>
         <Pressable onPress={() => setMenuOpen(true)} style={styles.menuButton}>
           <Text style={styles.menuButtonText}>☰</Text>
         </Pressable>
@@ -178,7 +183,7 @@ export default function NativeAppShell({
       ) : null}
 
       {!loading && !error ? (
-        <View style={styles.body}>
+        <View style={[styles.body, isDark ? styles.bodyDark : null]}>
           {activeScreen === 'feed' ? (
             <StudentFeedSection
               categories={bootstrap?.categories || []}
@@ -538,6 +543,9 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
   },
+  bodyDark: {
+    backgroundColor: '#091421',
+  },
   centerState: {
     alignItems: 'center',
     flex: 1,
@@ -633,6 +641,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 10,
   },
+  headerDark: {
+    backgroundColor: '#0b1826',
+  },
   headerCopy: {
     flex: 1,
     minWidth: 0,
@@ -670,6 +681,9 @@ const styles = StyleSheet.create({
   safeArea: {
     backgroundColor: palette.bg,
     flex: 1,
+  },
+  safeAreaDark: {
+    backgroundColor: '#091421',
   },
   stateText: {
     color: palette.muted,

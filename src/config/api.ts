@@ -6,6 +6,7 @@ import { Directory, File, Paths } from 'expo-file-system';
 export const API_BASE_URL = 'https://campus-notice.onrender.com';
 export const WEB_BASE_URL = API_BASE_URL;
 export const SESSION_STORAGE_KEY = 'campus_notice_session';
+export const LANDING_PAGE_CACHE_KEY = 'campus_notice_landing_page';
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -39,6 +40,7 @@ export const API_PATHS = {
   passwordReset: '/ajax/api/password_reset.php',
   feedback: '/ajax/api/feedback.php',
   bootstrap: '/ajax/api/bootstrap.php',
+  analyticsReport: '/ajax/api/analytics_report.php',
   notices: '/ajax/api/notices.php',
   noticeActions: '/ajax/api/notice_actions.php',
   notifications: '/ajax/api/notifications.php',
@@ -482,6 +484,12 @@ export interface PublicSettingsResponse {
   success: boolean;
 }
 
+export interface LandingPageCache {
+  background_color?: string | null;
+  background_image?: string | null;
+  background_image_url?: string | null;
+}
+
 export interface StudentSyncResponse {
   backfill_summary?: {
     missing_both: number;
@@ -826,6 +834,24 @@ export async function warmUpServer(): Promise<void> {
 
 export async function fetchPublicSettings(): Promise<PublicSettingsResponse> {
   return getRequest<PublicSettingsResponse>(API_PATHS.publicSettings);
+}
+
+export async function saveLandingPageCache(settings: LandingPageCache): Promise<void> {
+  await AsyncStorage.setItem(LANDING_PAGE_CACHE_KEY, JSON.stringify(settings));
+}
+
+export async function loadLandingPageCache(): Promise<LandingPageCache | null> {
+  const stored = await AsyncStorage.getItem(LANDING_PAGE_CACHE_KEY);
+  if (!stored) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(stored) as LandingPageCache;
+  } catch {
+    await AsyncStorage.removeItem(LANDING_PAGE_CACHE_KEY);
+    return null;
+  }
 }
 
 export async function saveSession(user: StoredUser): Promise<void> {
@@ -1200,6 +1226,69 @@ export async function runAdminNoticeAction(
     ...authParams(user),
     ...payload,
   });
+}
+
+export interface AnalyticsReportRequest {
+  analyticsRange?: 'daily' | 'monthly' | 'weekly';
+  dateFrom?: string | null;
+  dateTo?: string | null;
+}
+
+export function analyticsReportUrl(user: StoredUser, request: AnalyticsReportRequest = {}): string {
+  const params = new URLSearchParams({
+    token: user.token,
+    user_id: String(user.user_id),
+  });
+
+  if (request.analyticsRange) {
+    params.set('analytics_range', request.analyticsRange);
+  }
+
+  if (request.dateFrom) {
+    params.set('date_from', request.dateFrom);
+  }
+
+  if (request.dateTo) {
+    params.set('date_to', request.dateTo);
+  }
+
+  return `${apiUrl(API_PATHS.analyticsReport)}?${params.toString()}`;
+}
+
+export async function downloadAnalyticsReportPdf(
+  user: StoredUser,
+  request: AnalyticsReportRequest = {}
+): Promise<File> {
+  const url = analyticsReportUrl(user, request);
+  const reportDir = new Directory(Paths.cache, 'campusnotice-reports');
+  reportDir.create({ idempotent: true, intermediates: true });
+
+  const fileName = `analytics-report-${Date.now()}.pdf`;
+  const reportFile = new File(reportDir, fileName);
+  if (reportFile.exists) {
+    reportFile.delete();
+  }
+
+  try {
+    return await File.downloadFileAsync(url, reportFile);
+  } catch (error) {
+    const fallback = 'Could not generate the analytics report.';
+
+    try {
+      const response = await expoFetch(url);
+      if (!response.ok) {
+        const text = await response.text();
+        if (text.trim() !== '') {
+          const parsed = JSON.parse(text) as { error?: string };
+          throw new Error(parsed.error || text);
+        }
+      }
+    } catch {
+      // Ignore parsing errors and fall through to the fallback message below.
+    }
+
+    throw new Error(getApiErrorMessage(error, fallback));
+  }
 }
 
 export async function fetchLocationHub(user: StoredUser): Promise<LocationHubResponse> {

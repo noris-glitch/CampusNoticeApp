@@ -12,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useColorScheme } from 'react-native';
 
 import {
   DepartmentOption,
@@ -62,6 +63,7 @@ function ChoiceChip({
 
 export default function RegisterScreen() {
   const router = useRouter();
+  const isDark = useColorScheme() === 'dark';
   const [departments, setDepartments] = useState<DepartmentOption[]>([]);
   const [faculties, setFaculties] = useState<FacultyOption[]>([]);
   const [years, setYears] = useState<YearOption[]>([]);
@@ -194,60 +196,62 @@ export default function RegisterScreen() {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={styles.screen}
+      style={[styles.screen, isDark ? styles.screenDark : null]}
     >
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <View style={styles.hero}>
-          <Text style={styles.kicker}>Student Sign Up</Text>
-          <Text style={styles.title}>Create your JOOUST notice account.</Text>
-          <Text style={styles.subtitle}>
+          <Text style={[styles.kicker, isDark ? styles.kickerDark : null]}>Student Sign Up</Text>
+          <Text style={[styles.title, isDark ? styles.titleDark : null]}>Create your JOOUST notice account.</Text>
+          <Text style={[styles.subtitle, isDark ? styles.subtitleDark : null]}>
             Register once to receive notices, bookmarks, alerts, and campus event updates inside the app.
           </Text>
         </View>
 
-        <View style={styles.card}>
+        <View style={[styles.card, isDark ? styles.cardDark : null]}>
           {loading ? (
             <View style={styles.loadingBlock}>
               <ActivityIndicator color={colors.accent} />
-              <Text style={styles.loadingText}>Loading registration options...</Text>
+              <Text style={[styles.loadingText, isDark ? styles.loadingTextDark : null]}>
+                Loading registration options...
+              </Text>
             </View>
           ) : (
             <>
-              <Text style={styles.cardTitle}>Create account</Text>
+              <Text style={[styles.cardTitle, isDark ? styles.cardTitleDark : null]}>Create account</Text>
 
-              <Text style={styles.label}>Full name</Text>
-              <TextInput style={styles.input} value={name} onChangeText={setName} />
+              <Text style={[styles.label, isDark ? styles.labelDark : null]}>Full name</Text>
+              <TextInput style={[styles.input, isDark ? styles.inputDark : null]} value={name} onChangeText={setName} />
 
-              <Text style={styles.label}>Email address</Text>
+              <Text style={[styles.label, isDark ? styles.labelDark : null]}>Email address</Text>
               <TextInput
                 autoCapitalize="none"
                 autoCorrect={false}
                 keyboardType="email-address"
-                style={styles.input}
+                style={[styles.input, isDark ? styles.inputDark : null]}
                 value={email}
                 onChangeText={setEmail}
               />
 
-              <Text style={styles.label}>Student ID</Text>
+              <Text style={[styles.label, isDark ? styles.labelDark : null]}>Student ID</Text>
               <TextInput
                 autoCapitalize="characters"
                 autoCorrect={false}
-                style={styles.input}
+                style={[styles.input, isDark ? styles.inputDark : null]}
                 value={studentId}
                 onChangeText={setStudentId}
               />
 
-              <Text style={styles.label}>Phone number</Text>
+              <Text style={[styles.label, isDark ? styles.labelDark : null]}>Phone number</Text>
               <TextInput
                 keyboardType="phone-pad"
                 placeholder="+2547..."
                 placeholderTextColor={colors.muted}
-                style={styles.input}
+                style={[styles.input, isDark ? styles.inputDark : null]}
                 value={phoneNumber}
                 onChangeText={setPhoneNumber}
               />
 
-              <Text style={styles.label}>Faculty</Text>
+              <Text style={[styles.label, isDark ? styles.labelDark : null]}>Faculty</Text>
               <View style={styles.wrapRow}>
                 {faculties.map((faculty) => (
                   <ChoiceChip
@@ -262,7 +266,7 @@ export default function RegisterScreen() {
                 ))}
               </View>
 
-              <Text style={styles.label}>Department</Text>
+              <Text style={[styles.label, isDark ? styles.labelDark : null]}>Department</Text>
               <View style={styles.wrapRow}>
                 <ChoiceChip
                   active={selectedDepartment === null}
@@ -284,7 +288,7 @@ export default function RegisterScreen() {
               <TextInput
                 placeholder="Or type your department name"
                 placeholderTextColor={colors.muted}
-                style={styles.input}
+                style={[styles.input, isDark ? styles.inputDark : null]}
                 value={customDepartment}
                 onChangeText={(value) => {
                   setCustomDepartment(value);
@@ -294,7 +298,7 @@ export default function RegisterScreen() {
                 }}
               />
 
-              <Text style={styles.label}>Year of study</Text>
+              <Text style={[styles.label, isDark ? styles.labelDark : null]}>Year of study</Text>
               <View style={styles.wrapRow}>
                 {years.map((year) => (
                   <ChoiceChip
@@ -306,22 +310,22 @@ export default function RegisterScreen() {
                 ))}
               </View>
 
-              <Text style={styles.label}>Membership or leadership role</Text>
+              <Text style={[styles.label, isDark ? styles.labelDark : null]}>Membership or leadership role</Text>
               <TextInput
                 placeholder="Optional"
                 placeholderTextColor={colors.muted}
-                style={styles.input}
+                style={[styles.input, isDark ? styles.inputDark : null]}
                 value={membership}
                 onChangeText={setMembership}
               />
 
-              <Text style={styles.label}>Password</Text>
-              <View style={styles.passwordRow}>
+              <Text style={[styles.label, isDark ? styles.labelDark : null]}>Password</Text>
+              <View style={[styles.passwordRow, isDark ? styles.passwordRowDark : null]}>
                 <TextInput
                   autoCapitalize="none"
                   autoCorrect={false}
                   secureTextEntry={!showPassword}
-                  style={styles.passwordInput}
+                  style={[styles.passwordInput, isDark ? styles.passwordInputDark : null]}
                   value={password}
                   onChangeText={setPassword}
                 />
@@ -336,13 +340,13 @@ export default function RegisterScreen() {
                 ))}
               </View>
 
-              <Text style={styles.label}>Confirm password</Text>
-              <View style={styles.passwordRow}>
+              <Text style={[styles.label, isDark ? styles.labelDark : null]}>Confirm password</Text>
+              <View style={[styles.passwordRow, isDark ? styles.passwordRowDark : null]}>
                 <TextInput
                   autoCapitalize="none"
                   autoCorrect={false}
                   secureTextEntry={!showConfirmPassword}
-                  style={styles.passwordInput}
+                  style={[styles.passwordInput, isDark ? styles.passwordInputDark : null]}
                   value={confirmPassword}
                   onChangeText={setConfirmPassword}
                 />
@@ -381,11 +385,19 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     width: '100%',
   },
+  cardDark: {
+    backgroundColor: '#0f1e30',
+    borderColor: '#233548',
+    borderWidth: 1,
+  },
   cardTitle: {
     color: colors.ink,
     fontSize: 26,
     fontWeight: '900',
     marginBottom: 6,
+  },
+  cardTitleDark: {
+    color: '#f8fbff',
   },
   chip: {
     backgroundColor: '#edf3f9',
@@ -430,17 +442,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 14,
   },
+  inputDark: {
+    backgroundColor: '#0b1523',
+    borderColor: '#233548',
+    color: '#f8fbff',
+  },
   kicker: {
     color: colors.accent,
     fontSize: 13,
     fontWeight: '800',
     textTransform: 'uppercase',
   },
+  kickerDark: {
+    color: '#7fe0cb',
+  },
   label: {
     color: colors.ink,
     fontSize: 13,
     fontWeight: '700',
     marginTop: 12,
+  },
+  labelDark: {
+    color: '#c9d7e4',
   },
   loadingBlock: {
     alignItems: 'center',
@@ -451,12 +474,18 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 12,
   },
+  loadingTextDark: {
+    color: '#b8c8d9',
+  },
   passwordInput: {
     color: colors.ink,
     flex: 1,
     fontSize: 15,
     paddingHorizontal: 14,
     paddingVertical: 14,
+  },
+  passwordInputDark: {
+    color: '#f8fbff',
   },
   passwordRow: {
     alignItems: 'center',
@@ -466,6 +495,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flexDirection: 'row',
     marginTop: 8,
+  },
+  passwordRowDark: {
+    backgroundColor: '#0b1523',
+    borderColor: '#233548',
   },
   passwordToggle: {
     paddingHorizontal: 14,
@@ -523,6 +556,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.page,
     flex: 1,
   },
+  screenDark: {
+    backgroundColor: '#091421',
+  },
   scrollContent: {
     flexGrow: 1,
     padding: 20,
@@ -533,12 +569,18 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     marginTop: 8,
   },
+  subtitleDark: {
+    color: '#b8c8d9',
+  },
   title: {
     color: colors.ink,
     fontSize: 32,
     fontWeight: '900',
     lineHeight: 38,
     marginTop: 8,
+  },
+  titleDark: {
+    color: '#f8fbff',
   },
   wrapRow: {
     flexDirection: 'row',

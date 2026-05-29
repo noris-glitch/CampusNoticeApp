@@ -277,6 +277,9 @@ function fallbackNoticeDetail(notice: NoticeItem): NoticeDetailResponse {
   };
 }
 
+const commentDraftCache = new Map<number, string>();
+const replyDraftCache = new Map<number, Record<number, string>>();
+
 function NoticeCard({
   notice,
   onAcknowledge,
@@ -354,11 +357,34 @@ export function NoticeDetailModal({
   const [commentText, setCommentText] = useState('');
   const [answerDrafts, setAnswerDrafts] = useState<Record<number, string>>({});
   const [working, setWorking] = useState(false);
+  const noticeId = detail?.notice.id ?? null;
 
   useEffect(() => {
-    setCommentText('');
-    setAnswerDrafts({});
-  }, [detail?.notice.id]);
+    if (noticeId === null) {
+      setCommentText('');
+      setAnswerDrafts({});
+      return;
+    }
+
+    setCommentText(commentDraftCache.get(noticeId) || '');
+    setAnswerDrafts(replyDraftCache.get(noticeId) || {});
+  }, [noticeId]);
+
+  useEffect(() => {
+    if (noticeId === null) {
+      return;
+    }
+
+    commentDraftCache.set(noticeId, commentText);
+  }, [commentText, noticeId]);
+
+  useEffect(() => {
+    if (noticeId === null) {
+      return;
+    }
+
+    replyDraftCache.set(noticeId, answerDrafts);
+  }, [answerDrafts, noticeId]);
 
   if (!detail) {
     return null;
@@ -441,7 +467,7 @@ export function NoticeDetailModal({
       <View style={styles.modalBackdrop}>
         <View style={styles.modalCard}>
           <Text style={styles.modalTitle}>{notice.title}</Text>
-          <ScrollView style={styles.modalBodyWrap}>
+          <ScrollView keyboardShouldPersistTaps="handled" style={styles.modalBodyWrap}>
             <View style={styles.inlineRowWrap}>
               <Badge label={notice.category || 'General'} tone="accent" />
               <Badge label={(notice.priority || 'normal').toUpperCase()} tone="gold" />
@@ -461,14 +487,15 @@ export function NoticeDetailModal({
               </Text>
             ) : null}
             <View style={styles.commentsBlock}>
-              <Text style={styles.commentsTitle}>Comments & clarifications</Text>
-              <Text style={styles.helperText}>
-                Students can ask for clarification here, and super admins can post official replies or moderate the thread.
-              </Text>
+          <Text style={styles.commentsTitle}>Comments & clarifications</Text>
+          <Text style={styles.helperText}>
+            Students can ask for clarification here, and super admins can post official replies or moderate the thread.
+          </Text>
               {canComment ? (
                 <View style={styles.commentComposer}>
                   <TextInput
                     multiline
+                    blurOnSubmit={false}
                     placeholder="Ask a question or leave a comment about this notice"
                     placeholderTextColor={palette.muted}
                     style={[styles.input, styles.commentInput]}
@@ -510,6 +537,7 @@ export function NoticeDetailModal({
                           <>
                             <TextInput
                               multiline
+                              blurOnSubmit={false}
                               placeholder="Write an official reply"
                               placeholderTextColor={palette.muted}
                               style={[styles.input, styles.commentInput]}

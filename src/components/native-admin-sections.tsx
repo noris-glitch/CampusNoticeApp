@@ -1,5 +1,7 @@
 import * as DocumentPicker from 'expo-document-picker';
+import * as Print from 'expo-print';
 import * as Location from 'expo-location';
+import * as Sharing from 'expo-sharing';
 import * as WebBrowser from 'expo-web-browser';
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import React, { useDeferredValue, useEffect, useState } from 'react';
@@ -18,7 +20,9 @@ import {
 
 import {
   AdminDashboardData,
+  analyticsReportUrl,
   createAdminNotice,
+  downloadAnalyticsReportPdf,
   fetchBootstrap,
   fetchNoticeDetail,
   fetchAdminNotices,
@@ -69,6 +73,9 @@ export function AdminDashboardSection({
   const [range, setRange] = useState<'daily' | 'monthly' | 'weekly'>('weekly');
   const [dashboard, setDashboard] = useState<AdminDashboardData | null>(initialDashboard || null);
   const [loading, setLoading] = useState(false);
+  const [reporting, setReporting] = useState(false);
+  const [reportStartDate, setReportStartDate] = useState(formatApiDate(new Date(new Date().getFullYear(), new Date().getMonth(), 1)));
+  const [reportEndDate, setReportEndDate] = useState(formatApiDate(new Date()));
 
   useEffect(() => {
     setDashboard(initialDashboard || null);
@@ -102,6 +109,100 @@ export function AdminDashboardSection({
     };
   }, [isActive, range, refreshToken, session]);
 
+  const generateAnalyticsReportHtml = () => {
+    if (!dashboard) {
+      throw new Error('Dashboard data is not ready yet.');
+    }
+
+    return buildAnalyticsReportHtml(dashboard, range, session);
+  };
+
+  const reportRequest = {
+    analyticsRange: range,
+    dateFrom: reportStartDate || null,
+    dateTo: reportEndDate || null,
+  } as const;
+
+  const printAnalyticsReport = async () => {
+    if (reporting) {
+      return;
+    }
+
+    setReporting(true);
+    try {
+      if (Platform.OS === 'web') {
+        await WebBrowser.openBrowserAsync(analyticsReportUrl(session, reportRequest));
+        return;
+      }
+
+      const pdfFile = await downloadAnalyticsReportPdf(session, reportRequest);
+      await Print.printAsync({ uri: pdfFile.uri });
+    } catch (error) {
+      try {
+        await Print.printAsync({ html: generateAnalyticsReportHtml() });
+      } catch (fallbackError) {
+        Alert.alert(
+          'Analytics report',
+          getApiErrorMessage(error || fallbackError, 'Could not open the print dialog.')
+        );
+      }
+    } finally {
+      setReporting(false);
+    }
+  };
+
+  const exportAnalyticsReport = async () => {
+    if (reporting) {
+      return;
+    }
+
+    setReporting(true);
+    try {
+      if (Platform.OS === 'web') {
+        await WebBrowser.openBrowserAsync(analyticsReportUrl(session, reportRequest));
+        return;
+      }
+
+      const pdfFile = await downloadAnalyticsReportPdf(session, reportRequest);
+      const canShare = await Sharing.isAvailableAsync();
+
+      if (canShare) {
+        await Sharing.shareAsync(pdfFile.uri, {
+          dialogTitle: 'Share analytics report',
+          mimeType: 'application/pdf',
+          UTI: 'com.adobe.pdf',
+        });
+        return;
+      }
+
+      Alert.alert('Analytics report', `PDF saved to ${pdfFile.uri}`);
+    } catch (error) {
+      try {
+        const html = generateAnalyticsReportHtml();
+        const { uri } = await Print.printToFileAsync({ html });
+        const canShare = await Sharing.isAvailableAsync();
+
+        if (canShare) {
+          await Sharing.shareAsync(uri, {
+            dialogTitle: 'Share analytics report',
+            mimeType: 'application/pdf',
+            UTI: 'com.adobe.pdf',
+          });
+          return;
+        }
+
+        Alert.alert('Analytics report', `PDF saved to ${uri}`);
+      } catch (fallbackError) {
+        Alert.alert(
+          'Analytics report',
+          getApiErrorMessage(error || fallbackError, 'Could not generate the report PDF.')
+        );
+      }
+    } finally {
+      setReporting(false);
+    }
+  };
+
   if (!dashboard) {
     return (
       <ScrollView contentContainerStyle={styles.sectionContent}>
@@ -122,6 +223,35 @@ export function AdminDashboardSection({
           {(['daily', 'weekly', 'monthly'] as const).map((option) => (
             <ChoicePill key={option} active={range === option} label={option} onPress={() => setRange(option)} />
           ))}
+        </View>
+        <Text style={styles.helperText}>Export period</Text>
+        <DateSelectionField
+          label="Report start"
+          mode="date"
+          onChange={setReportStartDate}
+          placeholder="Select start date"
+          value={reportStartDate}
+        />
+        <DateSelectionField
+          label="Report end"
+          mode="date"
+          onChange={setReportEndDate}
+          placeholder="Select end date"
+          value={reportEndDate}
+        />
+        <View style={styles.buttonRow}>
+          <ActionButton
+            label={reporting ? 'Preparing...' : 'Print report'}
+            disabled={reporting}
+            onPress={() => void printAnalyticsReport()}
+            tone="navy"
+          />
+          <ActionButton
+            label={reporting ? 'Preparing...' : 'Save PDF'}
+            disabled={reporting}
+            onPress={() => void exportAnalyticsReport()}
+            tone="accent"
+          />
         </View>
         {loading ? <Text style={styles.mutedText}>Refreshing analytics...</Text> : null}
         <AnalyticsSummary dashboard={dashboard} />
@@ -1042,10 +1172,12 @@ function ToggleRow({
 }
 
 function ActionButton({
+  disabled = false,
   label,
   onPress,
   tone,
 }: {
+  disabled?: boolean;
   label: string;
   onPress: () => void;
   tone: 'accent' | 'danger' | 'navy' | 'warm';
@@ -1058,7 +1190,11 @@ function ActionButton({
   };
 
   return (
-    <Pressable style={[styles.button, { backgroundColor: colors[tone] }]} onPress={onPress}>
+    <Pressable
+      disabled={disabled}
+      style={[styles.button, { backgroundColor: colors[tone] }, disabled ? styles.buttonDisabled : null]}
+      onPress={onPress}
+    >
       <Text style={styles.buttonText}>{label}</Text>
     </Pressable>
   );
@@ -1242,6 +1378,347 @@ function formatDateLabel(value?: string | null) {
   return date.toLocaleString();
 }
 
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function formatReportDate(value?: string | null) {
+  if (!value) {
+    return 'N/A';
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleString('en-KE', {
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+function buildMetricRows(dashboard: AdminDashboardData): Array<{ label: string; points: number[]; total: number }> {
+  const series = dashboard.analytics?.series as Record<string, { points?: number[] }> | undefined;
+  const safeSeries = series || {};
+  const fallbackPoints = [0, 0, 0, 0, 0, 0, 0];
+
+  const normalizePoints = (key: string) => {
+    const raw = safeSeries[key]?.points;
+    if (!Array.isArray(raw) || raw.length === 0) {
+      return fallbackPoints;
+    }
+    return raw.map((value) => (typeof value === 'number' && Number.isFinite(value) ? value : 0));
+  };
+
+  const rows = [
+    { label: 'Logins', key: 'logins' },
+    { label: 'Views', key: 'notices_viewed' },
+    { label: 'Posted', key: 'notices_posted' },
+    { label: 'Downloads', key: 'notice_downloads' },
+    { label: 'Comments', key: 'notice_comments' },
+    { label: 'Active users', key: 'active_users' },
+    { label: 'Notif read', key: 'notifications_read' },
+  ];
+
+  return rows.map((row) => {
+    const points = normalizePoints(row.key);
+    return {
+      label: row.label,
+      points,
+      total: points.reduce((sum, value) => sum + value, 0),
+    };
+  });
+}
+
+function buildAnalyticsReportHtml(
+  dashboard: AdminDashboardData,
+  analyticsRange: 'daily' | 'monthly' | 'weekly',
+  session: StoredUser
+): string {
+  const generatedAt = new Date().toLocaleString('en-KE', {
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+  const reportRows = buildMetricRows(dashboard);
+  const trendRows = reportRows
+    .map(
+      (row) => `
+        <tr>
+          <td>${escapeHtml(row.label)}</td>
+          <td>${row.total.toLocaleString()}</td>
+          <td>${escapeHtml(drawSparkline(row.points))}</td>
+          <td>${row.points.reduce((sum, value) => sum + value, 0).toLocaleString()}</td>
+        </tr>
+      `
+    )
+    .join('');
+
+  const topNotices = (dashboard.reports?.most_viewed_notices || [])
+    .slice(0, 5)
+    .map(
+      (notice, index) => `
+        <tr>
+          <td>${index + 1}</td>
+          <td>${escapeHtml(notice.title)}</td>
+          <td>${notice.views.toLocaleString()}</td>
+        </tr>
+      `
+    )
+    .join('');
+
+  const departmentRows = (dashboard.reports?.department_activity || [])
+    .slice(0, 5)
+    .map(
+      (department) => `
+        <tr>
+          <td>${escapeHtml(department.name)}</td>
+          <td>${department.notices_posted.toLocaleString()}</td>
+          <td>${department.engagements.toLocaleString()}</td>
+          <td>${department.notice_views.toLocaleString()}</td>
+          <td>${department.notice_comments.toLocaleString()}</td>
+        </tr>
+      `
+    )
+    .join('');
+
+  const recentNotices = dashboard.recent_notices
+    .slice(0, 5)
+    .map(
+      (notice) => `
+        <li>
+          <strong>${escapeHtml(notice.title)}</strong>
+          <span>${escapeHtml(notice.category || 'General')} · ${escapeHtml(formatReportDate(notice.created_at))}</span>
+        </li>
+      `
+    )
+    .join('');
+
+  return `<!DOCTYPE html>
+  <html>
+    <head>
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <style>
+        @page { margin: 20px; }
+        :root {
+          color-scheme: light;
+          --ink: #10253c;
+          --muted: #5e7187;
+          --accent: #0f7b6c;
+          --line: #d9e3ef;
+          --bg: #f5f8fc;
+          --panel: #ffffff;
+        }
+        * { box-sizing: border-box; }
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+          margin: 0;
+          color: var(--ink);
+          background: var(--bg);
+        }
+        .page {
+          padding: 20px;
+        }
+        .hero {
+          background: linear-gradient(135deg, #17324d, #0f7b6c);
+          color: #fff;
+          border-radius: 20px;
+          padding: 22px;
+          margin-bottom: 16px;
+        }
+        .hero h1 {
+          margin: 0 0 8px;
+          font-size: 28px;
+        }
+        .hero p {
+          margin: 0;
+          opacity: 0.9;
+          line-height: 1.5;
+        }
+        .meta {
+          margin-top: 10px;
+          font-size: 12px;
+          opacity: 0.85;
+        }
+        .grid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 12px;
+          margin-bottom: 16px;
+        }
+        .card {
+          background: var(--panel);
+          border: 1px solid var(--line);
+          border-radius: 16px;
+          padding: 14px;
+        }
+        .card h2 {
+          margin: 0 0 8px;
+          font-size: 16px;
+        }
+        .stat {
+          font-size: 28px;
+          font-weight: 800;
+          margin: 0;
+        }
+        .stat-label {
+          color: var(--muted);
+          margin-top: 4px;
+          font-size: 12px;
+        }
+        table {
+          width: 100%;
+          border-collapse: collapse;
+        }
+        th, td {
+          border-bottom: 1px solid var(--line);
+          padding: 10px 8px;
+          text-align: left;
+          vertical-align: top;
+        }
+        th {
+          color: var(--muted);
+          font-size: 12px;
+          text-transform: uppercase;
+          letter-spacing: 0.04em;
+        }
+        td {
+          font-size: 13px;
+        }
+        ul {
+          margin: 0;
+          padding-left: 18px;
+        }
+        li {
+          margin: 10px 0;
+        }
+        li span {
+          display: block;
+          color: var(--muted);
+          font-size: 12px;
+          margin-top: 3px;
+        }
+        .section {
+          margin-bottom: 16px;
+        }
+        .section-title {
+          font-size: 18px;
+          font-weight: 800;
+          margin: 0 0 10px;
+        }
+        .footer {
+          color: var(--muted);
+          font-size: 11px;
+          margin-top: 16px;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="page">
+        <div class="hero">
+          <h1>Campus Notice Analytics Report</h1>
+          <p>Prepared for decision making across notices, student activity, and department engagement.</p>
+          <div class="meta">
+            Generated ${escapeHtml(generatedAt)} · Range ${escapeHtml(analyticsRange)} · Prepared for ${escapeHtml(session.name)}
+          </div>
+        </div>
+
+        <div class="grid">
+          <div class="card">
+            <p class="stat">${dashboard.total_notices.toLocaleString()}</p>
+            <div class="stat-label">Total notices</div>
+          </div>
+          <div class="card">
+            <p class="stat">${dashboard.total_students.toLocaleString()}</p>
+            <div class="stat-label">Students</div>
+          </div>
+          <div class="card">
+            <p class="stat">${dashboard.total_views.toLocaleString()}</p>
+            <div class="stat-label">Views</div>
+          </div>
+          <div class="card">
+            <p class="stat">${dashboard.total_bookmarks.toLocaleString()}</p>
+            <div class="stat-label">Bookmarks</div>
+          </div>
+        </div>
+
+        <div class="section card">
+          <h2 class="section-title">Analytics trend summary</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Metric</th>
+                <th>Total</th>
+                <th>Trend</th>
+                <th>Points</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${trendRows}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="section card">
+          <h2 class="section-title">Top viewed notices</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Notice</th>
+                <th>Views</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${topNotices || '<tr><td colspan="3">No report data available.</td></tr>'}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="section card">
+          <h2 class="section-title">Department activity</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Department</th>
+                <th>Posted</th>
+                <th>Engagements</th>
+                <th>Views</th>
+                <th>Comments</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${departmentRows || '<tr><td colspan="5">No department activity available.</td></tr>'}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="section card">
+          <h2 class="section-title">Recent notices</h2>
+          <ul>
+            ${recentNotices || '<li>No recent notices available.</li>'}
+          </ul>
+        </div>
+
+        <div class="footer">
+          Open questions: ${dashboard.open_questions.toLocaleString()} · Pending approvals: ${dashboard.pending_approvals.toLocaleString()} · Report prepared by ${escapeHtml(session.email)}
+        </div>
+      </div>
+    </body>
+  </html>`;
+}
+
 async function openNoticeAttachment(notice: NoticeItem) {
   const url = noticeAttachmentUrl(notice.attachment);
   if (!url) {
@@ -1272,6 +1749,9 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 12,
+  },
+  buttonDisabled: {
+    opacity: 0.7,
   },
   buttonRow: {
     flexDirection: 'row',
