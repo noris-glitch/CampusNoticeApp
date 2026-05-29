@@ -83,19 +83,41 @@ export default function LoginScreen() {
     let isMounted = true;
 
     async function loadPublicSettings() {
-      try {
-        const response = await fetchPublicSettings();
-        if (!isMounted) {
-          return;
-        }
-
+      const applySettings = (response: Awaited<ReturnType<typeof fetchPublicSettings>>) => {
         setBackgroundColor(response.landing_page.background_color || '#17324D');
-        setBackgroundImageUrl(landingBackgroundUrl(response.landing_page.background_image_url) || null);
-      } catch {
-        if (isMounted) {
-          setBackgroundColor('#17324D');
-          setBackgroundImageUrl(null);
+        setBackgroundImageUrl(
+          landingBackgroundUrl(
+            response.landing_page.background_image_url,
+            response.landing_page.background_image
+          ) || null
+        );
+      };
+
+      await warmUpServer().catch(() => {
+        // Best effort: if the backend is waking up, the settings request can still succeed next.
+      });
+
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          const response = await fetchPublicSettings();
+          if (!isMounted) {
+            return;
+          }
+
+          applySettings(response);
+          return;
+        } catch {
+          if (!isMounted || attempt === 1) {
+            break;
+          }
+
+          await new Promise((resolve) => setTimeout(resolve, 900));
         }
+      }
+
+      if (isMounted) {
+        setBackgroundColor('#17324D');
+        setBackgroundImageUrl(null);
       }
     }
 

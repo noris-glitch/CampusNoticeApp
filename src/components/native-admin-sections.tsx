@@ -273,14 +273,16 @@ function LineGraph({ points }: { points: number[] }) {
         const dy = to.y - from.y;
         const length = Math.sqrt(dx * dx + dy * dy);
         const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+        const midX = from.x + dx / 2;
+        const midY = from.y + dy / 2;
         return (
           <View
             key={`segment-${index}`}
             style={[
               styles.lineSegment,
               {
-                left: from.x,
-                top: from.y,
+                left: midX - length / 2,
+                top: midY - 1,
                 transform: [{ rotateZ: `${angle}deg` }],
                 width: length,
               },

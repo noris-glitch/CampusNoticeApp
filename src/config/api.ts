@@ -810,8 +810,11 @@ export function profilePictureUrl(profilePicture?: string | null): string | null
   return `${API_BASE_URL}/assets/uploads/profiles/${profilePicture}`;
 }
 
-export function landingBackgroundUrl(backgroundImageUrl?: string | null): string | null {
-  return assetUrl(backgroundImageUrl);
+export function landingBackgroundUrl(
+  backgroundImageUrl?: string | null,
+  backgroundImage?: string | null
+): string | null {
+  return assetUrl(backgroundImageUrl || backgroundImage);
 }
 
 export async function warmUpServer(): Promise<void> {

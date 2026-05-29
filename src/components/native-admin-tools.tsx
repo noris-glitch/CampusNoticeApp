@@ -973,7 +973,10 @@ export function CustomizationSection({ isActive, onDirty, refreshToken, session 
   };
 
   const departmentCatalogue = response?.departments || [];
-  const landingPreviewUrl = landingBackgroundUrl(response?.landing_page?.background_image_url || null);
+  const landingPreviewUrl = landingBackgroundUrl(
+    response?.landing_page?.background_image_url || null,
+    response?.landing_page?.background_image || null
+  );
   const facultyDepartmentCounts = departmentCatalogue.reduce<Record<number, number>>((counts, department) => {
     if (department.faculty_id) {
       counts[department.faculty_id] = (counts[department.faculty_id] || 0) + 1;
