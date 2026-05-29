@@ -410,10 +410,30 @@ export function NoticeDetailModal({
     setWorking(true);
     try {
       const result = await addNoticeComment(session, notice.id, commentText.trim());
+      const postedAt = new Date().toISOString();
+      onDetailChange({
+        ...detail,
+        comments: [
+          {
+            answer: null,
+            answerer_name: null,
+            answered_at: null,
+            answered_by: null,
+            asked_by: session.user_id,
+            asker_name: session.name,
+            created_at: postedAt,
+            id: -Date.now(),
+            notice_id: notice.id,
+            question: commentText.trim(),
+            status: 'open',
+          },
+          ...detail.comments,
+        ],
+      });
       Alert.alert('Comments', result.message || 'Comment posted successfully.');
       setCommentText('');
-      await refreshDetail();
-      onDirty();
+      void refreshDetail().catch(() => {});
+      void onDirty();
     } catch (commentError) {
       Alert.alert('Comments', getApiErrorMessage(commentError, 'Could not post your comment.'));
     } finally {
@@ -433,8 +453,8 @@ export function NoticeDetailModal({
       const result = await answerNoticeComment(session, notice.id, comment.id, answer);
       Alert.alert('Comments', result.message || 'Reply posted successfully.');
       setAnswerDrafts((current) => ({ ...current, [comment.id]: '' }));
-      await refreshDetail();
-      onDirty();
+      void refreshDetail().catch(() => {});
+      void onDirty();
     } catch (replyError) {
       Alert.alert('Comments', getApiErrorMessage(replyError, 'Could not send that reply.'));
     } finally {
@@ -453,8 +473,8 @@ export function NoticeDetailModal({
           ? await deleteNoticeComment(session, notice.id, comment.id)
           : await updateNoticeCommentStatus(session, notice.id, comment.id, action);
       Alert.alert('Comments', result.message || 'Comment updated successfully.');
-      await refreshDetail();
-      onDirty();
+      void refreshDetail().catch(() => {});
+      void onDirty();
     } catch (moderationError) {
       Alert.alert('Comments', getApiErrorMessage(moderationError, 'Could not update that comment.'));
     } finally {

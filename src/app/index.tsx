@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   ImageBackground,
   KeyboardAvoidingView,
   Platform,
@@ -13,12 +14,12 @@ import {
   View,
 } from 'react-native';
 import { Href, useLocalSearchParams, useRouter } from 'expo-router';
-import { useColorScheme } from 'react-native';
 
 import {
   loadLandingPageCache,
   fetchPublicSettings,
   getApiErrorMessage,
+  landingAppLogoUrl,
   landingBackgroundUrl,
   loadSession,
   loginWithPassword,
@@ -41,7 +42,6 @@ const colors = {
 export default function LoginScreen() {
   const params = useLocalSearchParams<{ email?: string }>();
   const router = useRouter();
-  const isDark = useColorScheme() === 'dark';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -49,8 +49,10 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [backgroundColor, setBackgroundColor] = useState('#17324D');
   const [backgroundImageUrl, setBackgroundImageUrl] = useState<string | null>(null);
+  const [appLogoUrl, setAppLogoUrl] = useState<string | null>(null);
   const [landingSettingsReady, setLandingSettingsReady] = useState(false);
   const backgroundImageSource = backgroundImageUrl ? { uri: backgroundImageUrl } : null;
+  const appLogoSource = appLogoUrl ? { uri: appLogoUrl } : require('../../assets/images/icon.png');
 
   useEffect(() => {
     if (typeof params.email === 'string' && params.email.trim() !== '') {
@@ -89,6 +91,7 @@ export default function LoginScreen() {
       if (isMounted && cached) {
         setBackgroundColor(cached.background_color || '#17324D');
         setBackgroundImageUrl(landingBackgroundUrl(cached.background_image_url, cached.background_image));
+        setAppLogoUrl(landingAppLogoUrl(cached.app_logo_url, cached.app_logo));
         setLandingSettingsReady(true);
       }
 
@@ -98,14 +101,18 @@ export default function LoginScreen() {
           response.landing_page.background_image_url,
           response.landing_page.background_image
         );
+        const nextLogo = landingAppLogoUrl(response.landing_page.app_logo_url, response.landing_page.app_logo);
 
         setBackgroundColor(nextColor);
         setBackgroundImageUrl(nextImage || null);
+        setAppLogoUrl(nextLogo || null);
         setLandingSettingsReady(true);
         void saveLandingPageCache({
           background_color: nextColor,
           background_image: response.landing_page.background_image,
           background_image_url: response.landing_page.background_image_url,
+          app_logo: response.landing_page.app_logo,
+          app_logo_url: response.landing_page.app_logo_url,
         });
       };
 
@@ -134,6 +141,7 @@ export default function LoginScreen() {
       if (isMounted) {
         setBackgroundColor('#17324D');
         setBackgroundImageUrl(null);
+        setAppLogoUrl(null);
         setLandingSettingsReady(true);
       }
     }
@@ -177,10 +185,11 @@ export default function LoginScreen() {
   const authContent = (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={[styles.screen, isDark ? { backgroundColor: '#091421' } : null]}
+      style={styles.screen}
     >
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <View style={styles.hero}>
+          <Image source={appLogoSource} style={styles.appLogo} />
           <Text style={[styles.kicker, styles.heroTextOnMedia]}>JOOUST Campus Notice</Text>
           <Text style={[styles.title, styles.heroTextOnMedia]}>Sign in to your campus workspace.</Text>
           <Text style={[styles.subtitle, styles.heroSubtextOnMedia]}>
@@ -188,33 +197,33 @@ export default function LoginScreen() {
           </Text>
         </View>
 
-        <View style={[styles.card, isDark ? styles.cardDark : null]}>
-          <Text style={[styles.cardTitle, isDark ? styles.cardTitleDark : null]}>Welcome back</Text>
-          <Text style={[styles.cardSubtitle, isDark ? styles.cardSubtitleDark : null]}>
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Welcome back</Text>
+          <Text style={styles.cardSubtitle}>
             Use your email and password to continue.
           </Text>
 
-          <Text style={[styles.label, isDark ? styles.labelDark : null]}>Email address</Text>
+          <Text style={styles.label}>Email address</Text>
           <TextInput
             autoCapitalize="none"
             autoCorrect={false}
             keyboardType="email-address"
             placeholder="you@jooust.ac.ke"
             placeholderTextColor={colors.muted}
-            style={[styles.input, isDark ? styles.inputDark : null]}
+            style={styles.input}
             value={email}
             onChangeText={setEmail}
           />
 
-          <Text style={[styles.label, isDark ? styles.labelDark : null]}>Password</Text>
-          <View style={[styles.passwordRow, isDark ? styles.passwordRowDark : null]}>
+          <Text style={styles.label}>Password</Text>
+          <View style={styles.passwordRow}>
             <TextInput
               autoCapitalize="none"
               autoCorrect={false}
               placeholder="Your password"
               placeholderTextColor={colors.muted}
               secureTextEntry={!showPassword}
-              style={[styles.passwordInput, isDark ? styles.passwordInputDark : null]}
+              style={styles.passwordInput}
               value={password}
               onChangeText={setPassword}
             />
@@ -245,11 +254,11 @@ export default function LoginScreen() {
             <Text style={styles.secondaryButtonText}>Create student account</Text>
           </Pressable>
 
-          <View style={[styles.supportCard, isDark ? styles.supportCardDark : null]}>
-            <Text style={[styles.supportTitle, isDark ? styles.supportTitleDark : null]}>
+          <View style={styles.supportCard}>
+            <Text style={styles.supportTitle}>
               Need help getting in?
             </Text>
-            <Text style={[styles.supportText, isDark ? styles.supportTextDark : null]}>
+            <Text style={styles.supportText}>
               First login may take a few seconds if the Render backend is waking up. If you are an admin without an account, contact the system administrator.
             </Text>
           </View>
@@ -259,19 +268,14 @@ export default function LoginScreen() {
   );
 
   return (
-    <View style={[styles.screenShell, { backgroundColor: isDark ? '#091421' : backgroundColor }]}>
+    <View style={[styles.screenShell, { backgroundColor }]}>
       {backgroundImageSource && landingSettingsReady ? (
         <ImageBackground source={backgroundImageSource} style={styles.backgroundImage} imageStyle={styles.backgroundImageLayer}>
-          <View style={[styles.backgroundOverlay, isDark ? styles.backgroundOverlayDark : null]}>{authContent}</View>
+          <View style={styles.backgroundOverlay}>{authContent}</View>
         </ImageBackground>
       ) : (
-        <View
-          style={[
-            styles.backgroundFallback,
-            { backgroundColor: isDark ? '#091421' : backgroundColor },
-          ]}
-        >
-          <View style={[styles.backgroundOverlay, isDark ? styles.backgroundOverlayDark : null]}>{authContent}</View>
+        <View style={[styles.backgroundFallback, { backgroundColor }]}>
+          <View style={styles.backgroundOverlay}>{authContent}</View>
         </View>
       )}
     </View>
@@ -321,6 +325,13 @@ const styles = StyleSheet.create({
   hero: {
     marginBottom: 24,
     width: '100%',
+  },
+  appLogo: {
+    alignSelf: 'flex-start',
+    borderRadius: 18,
+    height: 62,
+    marginBottom: 12,
+    width: 62,
   },
   heroSubtextOnMedia: {
     color: 'rgba(255,255,255,0.88)',

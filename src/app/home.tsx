@@ -1,14 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useColorScheme } from 'react-native';
 
 import NativeAppShell from '@/components/native-app-shell';
 import { clearSession, loadSession, StoredUser } from '@/config/api';
 
 export default function HomeScreen() {
   const router = useRouter();
-  const isDark = useColorScheme() === 'dark';
   const [session, setSession] = useState<StoredUser | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -42,11 +40,9 @@ export default function HomeScreen() {
 
   if (loading || !session) {
     return (
-      <View style={[styles.loadingScreen, isDark ? styles.loadingScreenDark : null]}>
+      <View style={styles.loadingScreen}>
         <ActivityIndicator color="#0f7b6c" size="large" />
-        <Text style={[styles.loadingText, isDark ? styles.loadingTextDark : null]}>
-          Loading your dashboard...
-        </Text>
+        <Text style={styles.loadingText}>Loading your dashboard...</Text>
       </View>
     );
   }
@@ -69,15 +65,9 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
   },
-  loadingScreenDark: {
-    backgroundColor: '#091421',
-  },
   loadingText: {
     color: '#60738a',
     fontSize: 14,
     marginTop: 12,
-  },
-  loadingTextDark: {
-    color: '#b8c8d9',
   },
 });

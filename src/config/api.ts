@@ -102,6 +102,8 @@ export interface LandingPageSettings {
   background_color: string;
   background_image?: string | null;
   background_image_url?: string | null;
+  app_logo?: string | null;
+  app_logo_url?: string | null;
 }
 
 export interface YearOption {
@@ -280,6 +282,7 @@ export interface BootstrapResponse {
   dashboard: AdminDashboardData | StudentDashboardData;
   departments?: DepartmentOption[];
   faculties: FacultyOption[];
+  landing_page?: LandingPageSettings;
   success: boolean;
   unread_notifications: number;
   user: StoredUser;
@@ -488,6 +491,8 @@ export interface LandingPageCache {
   background_color?: string | null;
   background_image?: string | null;
   background_image_url?: string | null;
+  app_logo?: string | null;
+  app_logo_url?: string | null;
 }
 
 export interface StudentSyncResponse {
@@ -823,6 +828,13 @@ export function landingBackgroundUrl(
   backgroundImage?: string | null
 ): string | null {
   return assetUrl(backgroundImageUrl || backgroundImage);
+}
+
+export function landingAppLogoUrl(
+  appLogoUrl?: string | null,
+  appLogo?: string | null
+): string | null {
+  return assetUrl(appLogoUrl || appLogo);
 }
 
 export async function warmUpServer(): Promise<void> {
@@ -1460,10 +1472,33 @@ export async function uploadLandingPageBackground(
   );
 }
 
+export async function uploadLandingPageLogo(
+  user: StoredUser,
+  asset: UploadAsset
+): Promise<SimpleSuccessResponse> {
+  return postMultipartRequest<SimpleSuccessResponse>(
+    API_PATHS.manageUsers,
+    {
+      ...authParams(user),
+      action: 'upload_landing_logo',
+    },
+    {
+      app_logo: asset,
+    }
+  );
+}
+
 export async function clearLandingPageBackground(user: StoredUser): Promise<SimpleSuccessResponse> {
   return postRequest<SimpleSuccessResponse>(API_PATHS.manageUsers, {
     ...authParams(user),
     action: 'clear_landing_background',
+  });
+}
+
+export async function clearLandingPageLogo(user: StoredUser): Promise<SimpleSuccessResponse> {
+  return postRequest<SimpleSuccessResponse>(API_PATHS.manageUsers, {
+    ...authParams(user),
+    action: 'clear_landing_logo',
   });
 }
 

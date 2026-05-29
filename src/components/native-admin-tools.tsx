@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 
 import {
+  clearLandingPageLogo,
   clearLandingPageBackground,
   createDepartment,
   createEmergencyAlert,
@@ -27,6 +28,7 @@ import {
   fetchManageUsers,
   fetchStudentSyncInfo,
   getApiErrorMessage,
+  landingAppLogoUrl,
   landingBackgroundUrl,
   ManageUsersResponse,
   ManagedUserItem,
@@ -36,6 +38,7 @@ import {
   updateManagedUser,
   updateLandingPageTheme,
   UploadAsset,
+  uploadLandingPageLogo,
   uploadLandingPageBackground,
   uploadStudentSyncFile,
   UserRole,
@@ -922,6 +925,7 @@ export function CustomizationSection({ isActive, onDirty, refreshToken, session 
   const [departmentFacultyId, setDepartmentFacultyId] = useState<number | null>(null);
   const [landingColor, setLandingColor] = useState('#17324D');
   const [landingBackgroundFile, setLandingBackgroundFile] = useState<UploadAsset | null>(null);
+  const [landingLogoFile, setLandingLogoFile] = useState<UploadAsset | null>(null);
 
   const applyResponse = (next: ManageUsersResponse) => {
     setResponse(next);
@@ -976,6 +980,10 @@ export function CustomizationSection({ isActive, onDirty, refreshToken, session 
   const landingPreviewUrl = landingBackgroundUrl(
     response?.landing_page?.background_image_url || null,
     response?.landing_page?.background_image || null
+  );
+  const landingLogoPreviewUrl = landingAppLogoUrl(
+    response?.landing_page?.app_logo_url || null,
+    response?.landing_page?.app_logo || null
   );
   const facultyDepartmentCounts = departmentCatalogue.reduce<Record<number, number>>((counts, department) => {
     if (department.faculty_id) {
@@ -1164,6 +1172,64 @@ export function CustomizationSection({ isActive, onDirty, refreshToken, session 
     }
   };
 
+  const pickLandingLogo = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        copyToCacheDirectory: true,
+        type: 'image/*',
+      });
+
+      if (result.canceled || !result.assets?.[0]) {
+        return;
+      }
+
+      const asset = result.assets[0];
+      setLandingLogoFile({
+        fileSize: asset.size,
+        mimeType: asset.mimeType,
+        name: asset.name,
+        uri: asset.uri,
+      });
+    } catch (pickError) {
+      Alert.alert('App logo', getApiErrorMessage(pickError, 'Could not pick that image.'));
+    }
+  };
+
+  const uploadLandingLogo = async () => {
+    if (!landingLogoFile) {
+      Alert.alert('App logo', 'Choose an image first.');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const result = await uploadLandingPageLogo(session, landingLogoFile);
+      Alert.alert('App logo', result.message || 'App logo updated.');
+      setLandingLogoFile(null);
+      onDirty();
+      await refresh();
+    } catch (uploadError) {
+      Alert.alert('App logo', getApiErrorMessage(uploadError, 'Could not upload that logo image.'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const clearLandingLogo = async () => {
+    setSaving(true);
+    try {
+      const result = await clearLandingPageLogo(session);
+      Alert.alert('App logo', result.message || 'App logo removed.');
+      setLandingLogoFile(null);
+      onDirty();
+      await refresh();
+    } catch (clearError) {
+      Alert.alert('App logo', getApiErrorMessage(clearError, 'Could not remove that logo image.'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <ScrollView contentContainerStyle={styles.screen}>
       <SectionIntro
@@ -1308,7 +1374,46 @@ export function CustomizationSection({ isActive, onDirty, refreshToken, session 
           </Panel>
 
           <Panel>
-            <Text style={styles.sectionTitle}>Login background picture</Text>
+            <Text style={styles.sectionTitle}>Login branding</Text>
+            <Text style={styles.bodyText}>
+              This controls the logo and background users see on the login screen and in the app header.
+            </Text>
+            <Text style={styles.label}>App logo</Text>
+            {landingLogoPreviewUrl ? (
+              <View style={styles.logoPreviewRow}>
+                <Image source={{ uri: landingLogoPreviewUrl }} style={styles.logoPreview} />
+                <View style={styles.logoPreviewCopy}>
+                  <Text style={styles.helperText}>Current logo</Text>
+                  <Text style={styles.helperTextMuted}>Use a square image for the cleanest results.</Text>
+                </View>
+              </View>
+            ) : (
+              <View style={styles.previewPlaceholder}>
+                <Text style={styles.helperText}>No custom app logo uploaded yet.</Text>
+              </View>
+            )}
+            <Pressable onPress={() => void pickLandingLogo()} style={styles.filePicker}>
+              <Text style={styles.filePickerText}>
+                {landingLogoFile ? landingLogoFile.name : response.landing_page.app_logo || 'Choose app logo image'}
+              </Text>
+            </Pressable>
+            <View style={styles.buttonRow}>
+              <ActionButton
+                disabled={saving}
+                label={saving ? 'Uploading...' : 'Upload logo'}
+                onPress={() => void uploadLandingLogo()}
+                tone="accent"
+              />
+              {response.landing_page.app_logo ? (
+                <ActionButton
+                  disabled={saving}
+                  label="Remove logo"
+                  onPress={() => void clearLandingLogo()}
+                  tone="danger"
+                />
+              ) : null}
+            </View>
+            <Text style={styles.label}>Login background picture</Text>
             <Text style={styles.bodyText}>
               This picture appears behind the login page on the website and on the native app sign-in screen.
             </Text>
@@ -1659,6 +1764,12 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     marginTop: 8,
   },
+  helperTextMuted: {
+    color: palette.muted,
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 4,
+  },
   inlineRowWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -1724,6 +1835,25 @@ const styles = StyleSheet.create({
     color: palette.ink,
     fontSize: 26,
     fontWeight: '900',
+  },
+  logoPreview: {
+    borderRadius: 16,
+    height: 72,
+    width: 72,
+  },
+  logoPreviewCopy: {
+    flex: 1,
+  },
+  logoPreviewRow: {
+    alignItems: 'center',
+    backgroundColor: '#eef4fb',
+    borderColor: palette.line,
+    borderRadius: 18,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 14,
+    marginTop: 12,
+    padding: 14,
   },
   panel: {
     backgroundColor: palette.card,

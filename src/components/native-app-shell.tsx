@@ -1,7 +1,6 @@
 import React, { startTransition, useEffect, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Modal, Pressable, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useColorScheme } from 'react-native';
 
 import { FeedbackInboxSection, StudentFeedbackSection } from '@/components/native-feedback-sections';
 import {
@@ -26,6 +25,7 @@ import {
   BootstrapResponse,
   fetchBootstrap,
   getApiErrorMessage,
+  landingAppLogoUrl,
   saveSession,
   StoredUser,
   StudentDashboardData,
@@ -77,7 +77,7 @@ export default function NativeAppShell({
   onSessionUpdated: (user: StoredUser) => Promise<void> | void;
   session: StoredUser;
 }) {
-  const isDark = useColorScheme() === 'dark';
+  const isDark = false;
   const [activeScreen, setActiveScreen] = useState<ScreenKey>(getDefaultScreen(session.role));
   const [bootstrap, setBootstrap] = useState<BootstrapResponse | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -94,10 +94,13 @@ export default function NativeAppShell({
 
   useEffect(() => {
     let isMounted = true;
+    const hasBootstrap = bootstrap !== null;
 
     async function load() {
-      setLoading(true);
-      setError(null);
+      if (!hasBootstrap) {
+        setLoading(true);
+        setError(null);
+      }
 
       try {
         const response = await fetchBootstrap(session);
@@ -105,11 +108,11 @@ export default function NativeAppShell({
           setBootstrap(response);
         }
       } catch (loadError) {
-        if (isMounted) {
+        if (isMounted && !hasBootstrap) {
           setError(getApiErrorMessage(loadError, 'Could not load the app dashboard.'));
         }
       } finally {
-        if (isMounted) {
+        if (isMounted && !hasBootstrap) {
           setLoading(false);
         }
       }
@@ -139,6 +142,8 @@ export default function NativeAppShell({
     session.role === 'student' ? (bootstrap?.dashboard as StudentDashboardData | undefined) : undefined;
   const adminDashboard =
     session.role !== 'student' ? (bootstrap?.dashboard as AdminDashboardData | undefined) : undefined;
+  const appLogoUrl = landingAppLogoUrl(bootstrap?.landing_page?.app_logo_url, bootstrap?.landing_page?.app_logo);
+  const appLogoSource = appLogoUrl ? { uri: appLogoUrl } : require('../../assets/images/icon.png');
 
   return (
     <SafeAreaView
@@ -151,6 +156,7 @@ export default function NativeAppShell({
         <Pressable onPress={() => setMenuOpen(true)} style={styles.menuButton}>
           <Text style={styles.menuButtonText}>☰</Text>
         </Pressable>
+        <Image source={appLogoSource} style={styles.headerLogo} />
         <View style={styles.headerCopy}>
           <Text numberOfLines={1} style={styles.kicker}>
             {session.role_label || 'JOOUST Notice'}
@@ -356,6 +362,7 @@ export default function NativeAppShell({
           <Pressable style={styles.drawerMask} onPress={() => setMenuOpen(false)} />
           <View style={styles.drawer}>
             <View style={styles.drawerHeader}>
+              <Image source={appLogoSource} style={styles.drawerLogo} />
               <Text style={styles.drawerTitle}>JOOUSTNotice</Text>
               <Text style={styles.drawerSubtitle}>{session.name}</Text>
             </View>
@@ -476,7 +483,14 @@ function getMenuSections(
           { icon: '➕', key: 'create', label: 'Create notice' },
           { icon: '📍', key: 'createLocation', label: 'Create location event' },
           { icon: '📋', key: 'manage', label: 'Manage notices' },
-          { icon: '🗺️', key: 'eventMap', label: 'Event map' },
+        ],
+      },
+      {
+        heading: 'Location & Events',
+        items: [
+          { icon: '📍', key: 'shareLocation', label: 'Share location' },
+          { icon: '🗺️', key: 'nearby', label: 'Nearby events' },
+          { icon: '📍', key: 'eventMap', label: 'Event map' },
         ],
       },
       {
@@ -570,6 +584,12 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     paddingBottom: 18,
   },
+  drawerLogo: {
+    borderRadius: 16,
+    height: 54,
+    marginBottom: 12,
+    width: 54,
+  },
   drawerIcon: {
     fontSize: 18,
   },
@@ -643,6 +663,12 @@ const styles = StyleSheet.create({
   },
   headerDark: {
     backgroundColor: '#0b1826',
+  },
+  headerLogo: {
+    borderRadius: 12,
+    height: 44,
+    marginTop: 2,
+    width: 44,
   },
   headerCopy: {
     flex: 1,

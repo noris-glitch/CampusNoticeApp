@@ -12,7 +12,6 @@ import {
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useColorScheme } from 'react-native';
 
 import {
   DepartmentOption,
@@ -63,7 +62,7 @@ function ChoiceChip({
 
 export default function RegisterScreen() {
   const router = useRouter();
-  const isDark = useColorScheme() === 'dark';
+  const isDark = false;
   const [departments, setDepartments] = useState<DepartmentOption[]>([]);
   const [faculties, setFaculties] = useState<FacultyOption[]>([]);
   const [years, setYears] = useState<YearOption[]>([]);

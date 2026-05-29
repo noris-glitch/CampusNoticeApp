@@ -12,7 +12,6 @@ import {
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useColorScheme } from 'react-native';
 
 import {
   getApiErrorMessage,
@@ -32,7 +31,7 @@ const colors = {
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
-  const isDark = useColorScheme() === 'dark';
+  const isDark = false;
   const [email, setEmail] = useState('');
   const [resetToken, setResetToken] = useState<string | null>(null);
   const [password, setPassword] = useState('');

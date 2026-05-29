@@ -346,6 +346,15 @@ function buildMapHtml(events: LocationEventItem[], userLocation: LocationHubResp
         <div id="map"></div>
         <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
         <script>
+          function escapeHtml(value) {
+            return String(value || '')
+              .replaceAll('&', '&amp;')
+              .replaceAll('<', '&lt;')
+              .replaceAll('>', '&gt;')
+              .replaceAll('"', '&quot;')
+              .replaceAll("'", '&#039;');
+          }
+
           const events = ${safeEvents};
           const userLocation = ${safeUserLocation};
           const firstEvent = events[0];
@@ -379,16 +388,6 @@ function buildMapHtml(events: LocationEventItem[], userLocation: LocationHubResp
               escapeHtml(event.event_date || event.publish_at || event.created_at || '')
             );
           });
-        </script>
-        <script>
-          function escapeHtml(value) {
-            return String(value || '')
-              .replaceAll('&', '&amp;')
-              .replaceAll('<', '&lt;')
-              .replaceAll('>', '&gt;')
-              .replaceAll('"', '&quot;')
-              .replaceAll("'", '&#039;');
-          }
         </script>
       </body>
     </html>
