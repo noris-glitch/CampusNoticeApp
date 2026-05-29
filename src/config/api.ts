@@ -171,8 +171,8 @@ export interface NoticeCommentItem {
 }
 
 export interface NoticeDetailResponse {
-  can_comment: boolean;
-  can_moderate_comments: boolean;
+  can_comment?: boolean;
+  can_moderate_comments?: boolean;
   comments: NoticeCommentItem[];
   notice: NoticeItem;
   success: boolean;

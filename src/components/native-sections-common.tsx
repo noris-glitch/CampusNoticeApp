@@ -271,8 +271,6 @@ async function openNoticeAttachment(notice: NoticeItem) {
 
 function fallbackNoticeDetail(notice: NoticeItem): NoticeDetailResponse {
   return {
-    can_comment: false,
-    can_moderate_comments: false,
     comments: [],
     notice,
     success: true,
@@ -368,7 +366,9 @@ export function NoticeDetailModal({
 
   const notice = detail.notice;
   const isAcked = notice.acknowledgement_status === 'acknowledged';
-  const visibleComments = detail.comments.filter((item) => item.status !== 'hidden' || detail.can_moderate_comments);
+  const canComment = detail.can_comment ?? session.role === 'student';
+  const canModerateComments = detail.can_moderate_comments ?? session.role === 'super_admin';
+  const visibleComments = detail.comments.filter((item) => item.status !== 'hidden' || canModerateComments);
 
   const refreshDetail = async () => {
     const next = await fetchNoticeDetail(session, notice.id);
@@ -465,7 +465,7 @@ export function NoticeDetailModal({
               <Text style={styles.helperText}>
                 Students can ask for clarification here, and super admins can post official replies or moderate the thread.
               </Text>
-              {detail.can_comment ? (
+              {canComment ? (
                 <View style={styles.commentComposer}>
                   <TextInput
                     multiline
@@ -504,7 +504,7 @@ export function NoticeDetailModal({
                         </Text>
                       </View>
                     ) : null}
-                    {detail.can_moderate_comments ? (
+                    {canModerateComments ? (
                       <>
                         {!comment.answer ? (
                           <>
