@@ -11,7 +11,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { WebView } from 'react-native-webview';
+import MapView, { Marker } from 'react-native-maps';
 
 import {
   fetchLocationHub,
@@ -90,8 +90,19 @@ export default function LocationEventsSection({
     };
   }, [isActive, refreshToken, session]);
 
-  const featuredEvents = hub?.nearby_events?.length ? hub.nearby_events : hub?.events || [];
-  const mapHtml = buildMapHtml(hub?.events || [], hub?.user_location || null);
+  const hubEvents = Array.isArray(hub?.events) ? hub.events : [];
+  const nearbyEvents = Array.isArray(hub?.nearby_events) ? hub.nearby_events : [];
+  const featuredEvents = nearbyEvents.length ? nearbyEvents : hubEvents;
+  const userLocation = hub?.user_location ?? null;
+  const validMapEvents = hubEvents.filter(hasValidCoordinates);
+  const userLocationCoordinates =
+    userLocation && isValidCoordinate(userLocation.latitude) && isValidCoordinate(userLocation.longitude)
+      ? {
+          latitude: userLocation.latitude,
+          longitude: userLocation.longitude,
+        }
+      : null;
+  const mapRegion = getInitialRegion(userLocation, hubEvents);
   const intro = getLocationIntro(mode);
   const showShareTools = mode === 'hub' || mode === 'share' || mode === 'nearby';
   const showMap = mode === 'hub' || mode === 'map';
@@ -215,16 +226,39 @@ export default function LocationEventsSection({
           {showMap ? (
             <View style={styles.panel}>
               <Text style={styles.sectionTitle}>Campus event map</Text>
-              {hub.events.length > 0 ? (
+              {hubEvents.length > 0 ? (
                 <View style={styles.mapFrame}>
-                  <WebView
-                    domStorageEnabled
-                    javaScriptEnabled
-                    originWhitelist={['*']}
-                    scrollEnabled={false}
-                    source={{ html: mapHtml }}
+                  <MapView
+                    initialRegion={mapRegion}
+                    loadingEnabled
+                    rotateEnabled={false}
+                    scrollEnabled
+                    showsCompass
                     style={styles.mapView}
-                  />
+                    toolbarEnabled={false}
+                  >
+                    {userLocationCoordinates ? (
+                      <Marker
+                        coordinate={userLocationCoordinates}
+                        pinColor={palette.navy}
+                        title={userLocation?.location_name || 'Your location'}
+                        description={userLocation?.location_address || 'Saved campus location'}
+                      />
+                    ) : null}
+
+                    {validMapEvents.map((event) => (
+                        <Marker
+                          key={event.id}
+                          coordinate={{
+                            latitude: event.latitude,
+                            longitude: event.longitude,
+                          }}
+                          pinColor={palette.accent}
+                          title={event.title}
+                          description={event.location_name || 'Campus location'}
+                        />
+                      ))}
+                  </MapView>
                 </View>
               ) : (
                 <View style={styles.stateCard}>
@@ -240,10 +274,10 @@ export default function LocationEventsSection({
           {showEvents ? (
             <View style={styles.panel}>
               <Text style={styles.sectionTitle}>
-                {hub.nearby_events.length > 0 ? 'Nearby events' : 'Location-enabled notices'}
+                {nearbyEvents.length > 0 ? 'Nearby events' : 'Location-enabled notices'}
               </Text>
               <Text style={styles.helper}>
-                {hub.nearby_events.length > 0
+                {nearbyEvents.length > 0
                   ? 'Events inside the saved-radius view for your campus location.'
                   : 'These notices have map coordinates and can be explored on the campus map.'}
               </Text>
@@ -325,73 +359,35 @@ function formatDateLabel(value?: string | null) {
   return date.toLocaleString();
 }
 
-function buildMapHtml(events: LocationEventItem[], userLocation: LocationHubResponse['user_location']) {
-  const safeEvents = JSON.stringify(events).replace(/</g, '\\u003c');
-  const safeUserLocation = JSON.stringify(userLocation).replace(/</g, '\\u003c');
+function getInitialRegion(
+  userLocation: LocationHubResponse['user_location'],
+  events: LocationEventItem[]
+) {
+  const firstEvent = events.find((event) => isValidCoordinate(event.latitude) && isValidCoordinate(event.longitude));
 
-  return `
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
-        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-        <style>
-          html, body, #map { height: 100%; margin: 0; padding: 0; }
-          body { background: #f4f7fb; }
-          .leaflet-popup-content { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-        </style>
-      </head>
-      <body>
-        <div id="map"></div>
-        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-        <script>
-          function escapeHtml(value) {
-            return String(value || '')
-              .replaceAll('&', '&amp;')
-              .replaceAll('<', '&lt;')
-              .replaceAll('>', '&gt;')
-              .replaceAll('"', '&quot;')
-              .replaceAll("'", '&#039;');
-          }
+  const latitude = userLocation && isValidCoordinate(userLocation.latitude)
+    ? userLocation.latitude
+    : firstEvent?.latitude ?? -1.286389;
+  const longitude = userLocation && isValidCoordinate(userLocation.longitude)
+    ? userLocation.longitude
+    : firstEvent?.longitude ?? 36.817223;
 
-          const events = ${safeEvents};
-          const userLocation = ${safeUserLocation};
-          const firstEvent = events[0];
-          const initialLat = userLocation?.latitude ?? firstEvent?.latitude ?? -1.286389;
-          const initialLng = userLocation?.longitude ?? firstEvent?.longitude ?? 36.817223;
-          const map = L.map('map').setView([initialLat, initialLng], 14);
+  return {
+    latitude,
+    latitudeDelta: 0.08,
+    longitude,
+    longitudeDelta: 0.08,
+  };
+}
 
-          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; OpenStreetMap contributors'
-          }).addTo(map);
+function isValidCoordinate(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
 
-          if (userLocation?.latitude && userLocation?.longitude) {
-            L.circleMarker([userLocation.latitude, userLocation.longitude], {
-              radius: 9,
-              color: '#17324d',
-              fillColor: '#0f7b6c',
-              fillOpacity: 0.95,
-              weight: 3,
-            }).addTo(map).bindPopup('<strong>Your location</strong><br />' + (userLocation.location_name || 'Campus location'));
-          }
-
-          events.forEach((event) => {
-            if (!event.latitude || !event.longitude) {
-              return;
-            }
-
-            const marker = L.marker([event.latitude, event.longitude]).addTo(map);
-            marker.bindPopup(
-              '<strong>' + escapeHtml(event.title) + '</strong><br />' +
-              escapeHtml(event.location_name || 'Campus location') + '<br />' +
-              escapeHtml(event.event_date || event.publish_at || event.created_at || '')
-            );
-          });
-        </script>
-      </body>
-    </html>
-  `;
+function hasValidCoordinates(
+  event: LocationEventItem
+): event is LocationEventItem & { latitude: number; longitude: number } {
+  return isValidCoordinate(event.latitude) && isValidCoordinate(event.longitude);
 }
 
 const styles = StyleSheet.create({
