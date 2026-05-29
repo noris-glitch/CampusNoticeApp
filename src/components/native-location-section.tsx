@@ -4,7 +4,6 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,7 +11,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import { WebView } from 'react-native-webview';
 
 import {
   fetchLocationHub,
@@ -96,15 +95,7 @@ export default function LocationEventsSection({
   const featuredEvents = nearbyEvents.length ? nearbyEvents : hubEvents;
   const visibleFeaturedEvents = featuredEvents.slice(0, 12);
   const userLocation = hub?.user_location ?? null;
-  const validMapEvents = hubEvents.filter(hasValidCoordinates);
-  const userLocationCoordinates =
-    userLocation && isValidCoordinate(userLocation.latitude) && isValidCoordinate(userLocation.longitude)
-      ? {
-          latitude: userLocation.latitude,
-          longitude: userLocation.longitude,
-        }
-      : null;
-  const mapRegion = getInitialRegion(userLocation, hubEvents);
+  const mapHtml = buildMapHtml(hubEvents, userLocation);
   const intro = getLocationIntro(mode);
   const showShareTools = mode === 'hub' || mode === 'share' || mode === 'nearby';
   const showMap = mode === 'hub' || mode === 'map';
@@ -230,39 +221,14 @@ export default function LocationEventsSection({
               <Text style={styles.sectionTitle}>Campus event map</Text>
               {hubEvents.length > 0 ? (
                 <View style={styles.mapFrame}>
-                  <MapView
-                    provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
-                    initialRegion={mapRegion}
-                    loadingEnabled
-                    liteMode={Platform.OS === 'android'}
-                    rotateEnabled={false}
-                    scrollEnabled
-                    showsCompass
+                  <WebView
+                    domStorageEnabled
+                    javaScriptEnabled
+                    originWhitelist={['*']}
+                    scrollEnabled={false}
+                    source={{ html: mapHtml }}
                     style={styles.mapView}
-                    toolbarEnabled={false}
-                  >
-                    {userLocationCoordinates ? (
-                      <Marker
-                        coordinate={userLocationCoordinates}
-                        pinColor={palette.navy}
-                        title={userLocation?.location_name || 'Your location'}
-                        description={userLocation?.location_address || 'Saved campus location'}
-                      />
-                    ) : null}
-
-                    {validMapEvents.map((event) => (
-                        <Marker
-                          key={event.id}
-                          coordinate={{
-                            latitude: event.latitude,
-                            longitude: event.longitude,
-                          }}
-                          pinColor={palette.accent}
-                          title={event.title}
-                          description={event.location_name || 'Campus location'}
-                        />
-                      ))}
-                  </MapView>
+                  />
                 </View>
               ) : (
                 <View style={styles.stateCard}>
@@ -377,13 +343,6 @@ function formatLocationLabel(userLocation: LocationHubResponse['user_location'])
     return userLocation.location_address;
   }
 
-  const latitude = isValidCoordinate(userLocation.latitude) ? userLocation.latitude.toFixed(5) : null;
-  const longitude = isValidCoordinate(userLocation.longitude) ? userLocation.longitude.toFixed(5) : null;
-
-  if (latitude && longitude) {
-    return `${latitude}, ${longitude}`;
-  }
-
   return userLocation.location_name || 'Campus location';
 }
 
@@ -391,35 +350,8 @@ function formatDistanceLabel(distance?: number | null) {
   return Number.isFinite(distance as number) ? `${(distance as number).toFixed(1)} km away` : null;
 }
 
-function getInitialRegion(
-  userLocation: LocationHubResponse['user_location'],
-  events: LocationEventItem[]
-) {
-  const firstEvent = events.find((event) => isValidCoordinate(event.latitude) && isValidCoordinate(event.longitude));
-
-  const latitude = userLocation && isValidCoordinate(userLocation.latitude)
-    ? userLocation.latitude
-    : firstEvent?.latitude ?? -1.286389;
-  const longitude = userLocation && isValidCoordinate(userLocation.longitude)
-    ? userLocation.longitude
-    : firstEvent?.longitude ?? 36.817223;
-
-  return {
-    latitude,
-    latitudeDelta: 0.08,
-    longitude,
-    longitudeDelta: 0.08,
-  };
-}
-
 function isValidCoordinate(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
-}
-
-function hasValidCoordinates(
-  event: LocationEventItem
-): event is LocationEventItem & { latitude: number; longitude: number } {
-  return isValidCoordinate(event.latitude) && isValidCoordinate(event.longitude);
 }
 
 function normalizeEvents(value: unknown): LocationEventItem[] {
@@ -428,6 +360,75 @@ function normalizeEvents(value: unknown): LocationEventItem[] {
   }
 
   return value.filter((item): item is LocationEventItem => typeof item === 'object' && item !== null);
+}
+
+function buildMapHtml(events: LocationEventItem[], userLocation: LocationHubResponse['user_location']) {
+  const safeEvents = JSON.stringify(events).replace(/</g, '\\u003c');
+  const safeUserLocation = JSON.stringify(userLocation).replace(/</g, '\\u003c');
+
+  return `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+        <style>
+          html, body, #map { height: 100%; margin: 0; padding: 0; }
+          body { background: #f4f7fb; }
+          .leaflet-popup-content { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+        </style>
+      </head>
+      <body>
+        <div id="map"></div>
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+        <script>
+          function escapeHtml(value) {
+            return String(value || '')
+              .replaceAll('&', '&amp;')
+              .replaceAll('<', '&lt;')
+              .replaceAll('>', '&gt;')
+              .replaceAll('"', '&quot;')
+              .replaceAll("'", '&#039;');
+          }
+
+          const events = ${safeEvents};
+          const userLocation = ${safeUserLocation};
+          const firstEvent = events.find((event) => event && event.latitude && event.longitude);
+          const initialLat = userLocation?.latitude ?? firstEvent?.latitude ?? -1.286389;
+          const initialLng = userLocation?.longitude ?? firstEvent?.longitude ?? 36.817223;
+          const map = L.map('map').setView([initialLat, initialLng], 14);
+
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+          }).addTo(map);
+
+          if (userLocation?.latitude && userLocation?.longitude) {
+            L.circleMarker([userLocation.latitude, userLocation.longitude], {
+              radius: 9,
+              color: '#17324d',
+              fillColor: '#0f7b6c',
+              fillOpacity: 0.95,
+              weight: 3,
+            }).addTo(map).bindPopup('<strong>Your location</strong><br />' + escapeHtml(userLocation.location_name || 'Campus location'));
+          }
+
+          events.forEach((event) => {
+            if (!event || !event.latitude || !event.longitude) {
+              return;
+            }
+
+            const marker = L.marker([event.latitude, event.longitude]).addTo(map);
+            marker.bindPopup(
+              '<strong>' + escapeHtml(event.title) + '</strong><br />' +
+              escapeHtml(event.location_name || 'Campus location') + '<br />' +
+              escapeHtml(event.event_date || event.publish_at || event.created_at || '')
+            );
+          });
+        </script>
+      </body>
+    </html>
+  `;
 }
 
 const styles = StyleSheet.create({
