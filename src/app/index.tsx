@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Image,
   ImageBackground,
   KeyboardAvoidingView,
   Platform,
@@ -44,7 +43,6 @@ export default function LoginScreen() {
   const [backgroundImageUrl, setBackgroundImageUrl] = useState<string | null>(null);
   const [landingSettingsReady, setLandingSettingsReady] = useState(false);
   const backgroundImageSource = backgroundImageUrl ? { uri: backgroundImageUrl } : null;
-  const appLogoSource = require('../../assets/images/icon.png');
 
   useEffect(() => {
     if (typeof params.email === 'string' && params.email.trim() !== '') {
@@ -174,15 +172,6 @@ export default function LoginScreen() {
       style={styles.screen}
     >
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-        <View style={styles.hero}>
-          <Image source={appLogoSource} style={styles.appLogo} />
-          <Text style={[styles.kicker, styles.heroTextOnMedia]}>JOOUST Campus Notice</Text>
-          <Text style={[styles.title, styles.heroTextOnMedia]}>Sign in to your campus workspace.</Text>
-          <Text style={[styles.subtitle, styles.heroSubtextOnMedia]}>
-            Students can create accounts here, while admins and super admins can sign in with existing credentials.
-          </Text>
-        </View>
-
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Welcome back</Text>
           <Text style={styles.cardSubtitle}>
@@ -273,11 +262,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.panel,
     borderRadius: 28,
     elevation: 4,
-    padding: 22,
+    padding: 24,
     shadowColor: '#10253c',
     shadowOpacity: 0.08,
     shadowRadius: 12,
     width: '100%',
+    maxWidth: 420,
   },
   cardSubtitle: {
     color: colors.muted,
@@ -308,23 +298,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textTransform: 'uppercase',
   },
-  hero: {
-    marginBottom: 24,
-    width: '100%',
-  },
-  appLogo: {
-    alignSelf: 'flex-start',
-    borderRadius: 18,
-    height: 62,
-    marginBottom: 12,
-    width: 62,
-  },
-  heroSubtextOnMedia: {
-    color: 'rgba(255,255,255,0.88)',
-  },
-  heroTextOnMedia: {
-    color: '#ffffff',
-  },
   inlineLink: {
     alignSelf: 'flex-end',
     marginTop: 14,
@@ -344,12 +317,6 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingHorizontal: 14,
     paddingVertical: 14,
-  },
-  kicker: {
-    color: colors.accent,
-    fontSize: 13,
-    fontWeight: '800',
-    textTransform: 'uppercase',
   },
   label: {
     color: colors.ink,
@@ -432,7 +399,8 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 28,
   },
   secondaryButton: {
     alignItems: 'center',
@@ -445,12 +413,6 @@ const styles = StyleSheet.create({
     color: colors.accent,
     fontSize: 15,
     fontWeight: '800',
-  },
-  subtitle: {
-    color: colors.muted,
-    fontSize: 15,
-    lineHeight: 22,
-    marginTop: 8,
   },
   supportCard: {
     backgroundColor: colors.page,
@@ -479,13 +441,6 @@ const styles = StyleSheet.create({
   },
   supportTextDark: {
     color: '#b8c8d9',
-  },
-  title: {
-    color: colors.ink,
-    fontSize: 32,
-    fontWeight: '900',
-    lineHeight: 38,
-    marginTop: 8,
   },
   cardDark: {
     backgroundColor: '#0f1e30',
