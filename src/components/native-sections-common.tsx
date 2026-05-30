@@ -1,6 +1,6 @@
 import * as ImagePicker from 'expo-image-picker';
 import * as WebBrowser from 'expo-web-browser';
-import React, { useDeferredValue, useEffect, useState } from 'react';
+import React, { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -16,37 +16,34 @@ import {
   View,
 } from 'react-native';
 
+import { getApiErrorMessage } from '@/config/api-analytics';
 import {
   addNoticeComment,
   acknowledgeNotice,
   answerNoticeComment,
-  changePassword,
   deleteNoticeComment,
   fetchArchiveNotices,
   fetchBookmarks,
   fetchNoticeDetail,
   fetchNotices,
   fetchNotifications,
-  fetchProfile,
-  FacultyOption,
-  getApiErrorMessage,
   markNoticeViewed,
+  runNotificationAction,
+  toggleNoticeBookmark,
+  updateNoticeCommentStatus,
+} from '@/config/api-notices';
+import { changePassword, fetchProfile, saveNotificationPreferences, updateProfile, uploadProfilePhoto } from '@/config/api-profile';
+import { noticeAttachmentUrl, profilePictureUrl } from '@/config/api-core';
+import type {
+  FacultyOption,
   NoticeCommentItem,
   NoticeDetailResponse,
   NoticeItem,
-  noticeAttachmentUrl,
   NotificationItem,
   ProfileResponse,
-  profilePictureUrl,
-  runNotificationAction,
-  saveNotificationPreferences,
   StoredUser,
   StudentDashboardData,
-  toggleNoticeBookmark,
-  updateNoticeCommentStatus,
-  updateProfile,
-  uploadProfilePhoto,
-} from '@/config/api';
+} from '@/config/api-types';
 
 const palette = {
   accent: '#0f7b6c',
@@ -1339,7 +1336,7 @@ export function ProfileSection({
 
   const preferences = profile?.notification_preferences;
   const avatarUrl = profilePictureUrl(profile?.user.profile_picture || session.profile_picture);
-  const departments = profile?.departments || [];
+  const departments = useMemo(() => profile?.departments || [], [profile?.departments]);
   const visibleDepartments = departments.filter(
     (department) =>
       selectedFaculty === null || department.faculty_id === selectedFaculty || department.faculty_id === null

@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
 import NativeAppShell from '@/components/native-app-shell';
-import { clearSession, loadSession, StoredUser } from '@/config/api';
+import { clearSession, loadSession } from '@/config/session-storage';
+import type { StoredUser } from '@/config/api-types';
 
 export default function HomeScreen() {
   const router = useRouter();

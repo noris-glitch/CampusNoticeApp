@@ -12,7 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { useFocusEffect } from 'expo-router';
 
-import { WEB_BASE_URL, webUrl } from '@/config/api';
+import { WEB_BASE_URL, webUrl } from '@/config/api-core';
 
 const INITIAL_URL = webUrl('/login.php');
 

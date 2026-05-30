@@ -3,7 +3,8 @@ import axios from 'axios';
 import { useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
-import { API_PATHS, apiUrl, getApiErrorMessage } from '../config/api';
+import { API_PATHS, apiUrl } from '../config/api-core';
+import { getApiErrorMessage } from '../config/api-analytics';
 
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState('');

@@ -13,11 +13,8 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 
-import {
-  getApiErrorMessage,
-  requestPasswordReset,
-  submitPasswordReset,
-} from '@/config/api';
+import { getApiErrorMessage } from '@/config/api-analytics';
+import { requestPasswordReset, submitPasswordReset } from '@/config/api-auth';
 
 const colors = {
   accent: '#0f7b6c',

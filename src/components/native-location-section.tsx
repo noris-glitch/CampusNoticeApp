@@ -13,15 +13,10 @@ import {
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 
-import {
-  fetchLocationHub,
-  getApiErrorMessage,
-  LocationEventItem,
-  LocationHubResponse,
-  noticeAttachmentUrl,
-  saveUserLocation,
-  StoredUser,
-} from '@/config/api';
+import { getApiErrorMessage } from '@/config/api-analytics';
+import { fetchLocationHub, saveUserLocation } from '@/config/api-location';
+import { noticeAttachmentUrl } from '@/config/api-core';
+import type { LocationEventItem, LocationHubResponse, StoredUser } from '@/config/api-types';
 
 const palette = {
   accent: '#0f7b6c',
@@ -351,10 +346,6 @@ function formatLocationLabel(userLocation: LocationHubResponse['user_location'])
 
 function formatDistanceLabel(distance?: number | null) {
   return Number.isFinite(distance as number) ? `${(distance as number).toFixed(1)} km away` : null;
-}
-
-function isValidCoordinate(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value);
 }
 
 function normalizeEvents(value: unknown): LocationEventItem[] {

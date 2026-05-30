@@ -10,17 +10,9 @@ import {
   View,
 } from 'react-native';
 
-import {
-  fetchFeedback,
-  FeedbackItem,
-  FeedbackResponse,
-  getApiErrorMessage,
-  respondToFeedback,
-  SimpleSuccessResponse,
-  StoredUser,
-  submitFeedback,
-  updateFeedbackStatus,
-} from '@/config/api';
+import { fetchFeedback, respondToFeedback, submitFeedback, updateFeedbackStatus } from '@/config/api-auth';
+import { getApiErrorMessage } from '@/config/api-analytics';
+import type { FeedbackItem, FeedbackResponse, SimpleSuccessResponse, StoredUser } from '@/config/api-types';
 
 const palette = {
   accent: '#0f7b6c',

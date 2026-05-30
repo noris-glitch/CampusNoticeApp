@@ -18,23 +18,11 @@ import {
   View,
 } from 'react-native';
 
-import {
-  AdminDashboardData,
-  analyticsReportUrl,
-  createAdminNotice,
-  downloadAnalyticsReportPdf,
-  fetchBootstrap,
-  fetchNoticeDetail,
-  fetchAdminNotices,
-  getApiErrorMessage,
-  NoticeDetailResponse,
-  NoticeItem,
-  noticeAttachmentUrl,
-  runAdminNoticeAction,
-  StoredUser,
-  UploadAsset,
-} from '@/config/api';
-import { NoticeDetailModal } from '@/components/native-sections-common';
+import { createAdminNotice, fetchAdminNotices, runAdminNoticeAction } from '@/config/api-admin';
+import { fetchBootstrap } from '@/config/api-auth';
+import { analyticsReportUrl, downloadAnalyticsReportPdf, getApiErrorMessage } from '@/config/api-analytics';
+import { noticeAttachmentUrl } from '@/config/api-core';
+import type { AdminDashboardData, NoticeItem, StoredUser, UploadAsset } from '@/config/api-types';
 
 const palette = {
   accent: '#0f7b6c',
@@ -335,10 +323,10 @@ export function AdminDashboardSection({
 
       <Panel>
         <Text style={styles.sectionTitle}>Recent students</Text>
-        {dashboard.recent_students.length === 0 ? (
+        {(dashboard.recent_students || []).length === 0 ? (
           <Text style={styles.mutedText}>No recent student activity.</Text>
         ) : (
-          dashboard.recent_students.map((student) => (
+          (dashboard.recent_students || []).map((student) => (
             <View key={student.id} style={styles.listRow}>
               <Text style={styles.listTitle}>{student.name}</Text>
               <Text style={styles.listMeta}>{student.email} · {student.year ? `Year ${student.year}` : 'Year not set'}</Text>
@@ -636,7 +624,7 @@ export function CreateNoticeSection({
   const [facultyTarget, setFacultyTarget] = useState<number | null>(defaultFacultyTarget);
   const [departmentTarget, setDepartmentTarget] = useState<number | null>(null);
   const [yearTarget, setYearTarget] = useState<number | null>(null);
-  const [selectedAudienceRoles, setSelectedAudienceRoles] = useState<Array<'student' | 'admin' | 'super_admin'>>([]);
+  const [selectedAudienceRoles, setSelectedAudienceRoles] = useState<('student' | 'admin' | 'super_admin')[]>([]);
   const [scheduleDate, setScheduleDate] = useState('');
   const [expireDate, setExpireDate] = useState('');
   const [ackDate, setAckDate] = useState('');
@@ -757,7 +745,7 @@ export function CreateNoticeSection({
     }
   };
 
-  const useCurrentLocation = async () => {
+  const handleUseCurrentLocation = async () => {
     try {
       const permission = await Location.requestForegroundPermissionsAsync();
       if (!permission.granted) {
@@ -1036,7 +1024,7 @@ export function CreateNoticeSection({
         )}
         {locationEnabled ? (
           <>
-            <Pressable style={styles.helperButton} onPress={() => void useCurrentLocation()}>
+            <Pressable style={styles.helperButton} onPress={() => void handleUseCurrentLocation()}>
               <Text style={styles.helperButtonText}>Use my current location</Text>
             </Pressable>
             <Text style={styles.label}>Latitude</Text>
@@ -1446,7 +1434,7 @@ function formatReportDate(value?: string | null) {
   });
 }
 
-function buildMetricRows(dashboard: AdminDashboardData): Array<{ label: string; points: number[]; total: number }> {
+function buildMetricRows(dashboard: AdminDashboardData): { label: string; points: number[]; total: number }[] {
   const series = dashboard.analytics?.series as Record<string, { points?: number[] }> | undefined;
   const safeSeries = series || {};
   const fallbackPoints = [0, 0, 0, 0, 0, 0, 0];

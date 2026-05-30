@@ -1,5 +1,5 @@
-import React, { startTransition, useEffect, useState } from 'react';
-import { ActivityIndicator, Image, Modal, Pressable, StatusBar, StyleSheet, Text, View } from 'react-native';
+import React, { startTransition, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Modal, Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { FeedbackInboxSection, StudentFeedbackSection } from '@/components/native-feedback-sections';
@@ -20,15 +20,10 @@ import {
   StudentFeedSection,
 } from '@/components/native-sections-common';
 import ShortsSection from '@/components/native-shorts-section';
-import {
-  AdminDashboardData,
-  BootstrapResponse,
-  fetchBootstrap,
-  getApiErrorMessage,
-  saveSession,
-  StoredUser,
-  StudentDashboardData,
-} from '@/config/api';
+import { fetchBootstrap } from '@/config/api-auth';
+import { getApiErrorMessage } from '@/config/api-analytics';
+import { saveSession } from '@/config/session-storage';
+import type { AdminDashboardData, BootstrapResponse, StoredUser, StudentDashboardData } from '@/config/api-types';
 
 type ScreenKey =
   | 'archive'
@@ -54,7 +49,7 @@ type ScreenKey =
 
 type MenuSection = {
   heading: string;
-  items: Array<{ badge?: number; icon: string; key: ScreenKey; label: string }>;
+  items: { badge?: number; icon: string; key: ScreenKey; label: string }[];
 };
 
 const palette = {
@@ -83,6 +78,7 @@ export default function NativeAppShell({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshToken, setRefreshToken] = useState(0);
+  const bootstrapRef = useRef<BootstrapResponse | null>(null);
 
   useEffect(() => {
     startTransition(() => {
@@ -93,7 +89,7 @@ export default function NativeAppShell({
 
   useEffect(() => {
     let isMounted = true;
-    const hasBootstrap = bootstrap !== null;
+    const hasBootstrap = bootstrapRef.current !== null;
 
     async function load() {
       if (!hasBootstrap) {
@@ -104,6 +100,7 @@ export default function NativeAppShell({
       try {
         const response = await fetchBootstrap(session);
         if (isMounted) {
+          bootstrapRef.current = response;
           setBootstrap(response);
         }
       } catch (loadError) {
@@ -141,7 +138,6 @@ export default function NativeAppShell({
     session.role === 'student' ? (bootstrap?.dashboard as StudentDashboardData | undefined) : undefined;
   const adminDashboard =
     session.role !== 'student' ? (bootstrap?.dashboard as AdminDashboardData | undefined) : undefined;
-  const appLogoSource = require('../../assets/images/icon.png');
 
   return (
     <SafeAreaView
@@ -154,7 +150,6 @@ export default function NativeAppShell({
         <Pressable onPress={() => setMenuOpen(true)} style={styles.menuButton}>
           <Text style={styles.menuButtonText}>☰</Text>
         </Pressable>
-        <Image source={appLogoSource} style={styles.headerLogo} />
         <View style={styles.headerCopy}>
           <Text numberOfLines={1} style={styles.kicker}>
             {session.role_label || 'JOOUST Notice'}
@@ -362,40 +357,46 @@ export default function NativeAppShell({
           <Pressable style={styles.drawerMask} onPress={() => setMenuOpen(false)} />
           <View style={styles.drawer}>
             <View style={styles.drawerHeader}>
-              <Image source={appLogoSource} style={styles.drawerLogo} />
               <Text style={styles.drawerTitle}>JOOUSTNotice</Text>
               <Text style={styles.drawerSubtitle}>{session.name}</Text>
             </View>
-
-            {menuSections.map((section) => (
-              <View key={section.heading} style={styles.drawerSection}>
-                <Text style={styles.drawerSectionTitle}>{section.heading}</Text>
-                {section.items.map((item) => (
-                  <Pressable
-                    key={item.key}
-                    onPress={() => {
-                      startTransition(() => {
-                        setActiveScreen(item.key);
-                        setMenuOpen(false);
-                      });
-                    }}
-                    style={[styles.drawerItem, activeScreen === item.key ? styles.drawerItemActive : null]}
-                  >
-                    <Text style={[styles.drawerIcon, activeScreen === item.key ? styles.drawerItemTextActive : null]}>
-                      {item.icon}
-                    </Text>
-                    <Text style={[styles.drawerItemText, activeScreen === item.key ? styles.drawerItemTextActive : null]}>
-                      {item.label}
-                    </Text>
-                    {item.badge ? (
-                      <View style={styles.badge}>
-                        <Text style={styles.badgeText}>{item.badge}</Text>
-                      </View>
-                    ) : null}
-                  </Pressable>
-                ))}
-              </View>
-            ))}
+            <ScrollView
+              contentContainerStyle={styles.drawerContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              {menuSections.map((section) => (
+                <View key={section.heading} style={styles.drawerSection}>
+                  <Text style={styles.drawerSectionTitle}>{section.heading}</Text>
+                  {section.items.map((item) => (
+                    <Pressable
+                      key={item.key}
+                      onPress={() => {
+                        startTransition(() => {
+                          setActiveScreen(item.key);
+                          setMenuOpen(false);
+                        });
+                      }}
+                      style={[styles.drawerItem, activeScreen === item.key ? styles.drawerItemActive : null]}
+                    >
+                      <Text style={[styles.drawerIcon, activeScreen === item.key ? styles.drawerItemTextActive : null]}>
+                        {item.icon}
+                      </Text>
+                      <Text
+                        style={[styles.drawerItemText, activeScreen === item.key ? styles.drawerItemTextActive : null]}
+                      >
+                        {item.label}
+                      </Text>
+                      {item.badge ? (
+                        <View style={styles.badge}>
+                          <Text style={styles.badgeText}>{item.badge}</Text>
+                        </View>
+                      ) : null}
+                    </Pressable>
+                  ))}
+                </View>
+              ))}
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -594,6 +595,7 @@ const styles = StyleSheet.create({
   },
   drawer: {
     backgroundColor: '#10253c',
+    overflow: 'hidden',
     height: '100%',
     maxWidth: 360,
     paddingHorizontal: 18,
@@ -610,14 +612,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     paddingBottom: 18,
   },
-  drawerLogo: {
-    borderRadius: 16,
-    height: 54,
-    marginBottom: 12,
-    width: 54,
-  },
   drawerIcon: {
     fontSize: 18,
+  },
+  drawerContent: {
+    paddingBottom: 24,
   },
   drawerItem: {
     alignItems: 'center',
@@ -677,24 +676,18 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   header: {
-    alignItems: 'flex-start',
+    alignItems: 'center',
     backgroundColor: palette.navy,
     borderBottomLeftRadius: 28,
     borderBottomRightRadius: 28,
     flexDirection: 'row',
-    gap: 12,
-    paddingBottom: 16,
+    gap: 10,
+    paddingBottom: 14,
     paddingHorizontal: 16,
-    paddingTop: 10,
+    paddingTop: 12,
   },
   headerDark: {
     backgroundColor: '#0b1826',
-  },
-  headerLogo: {
-    borderRadius: 12,
-    height: 44,
-    marginTop: 2,
-    width: 44,
   },
   headerCopy: {
     flex: 1,
@@ -709,8 +702,8 @@ const styles = StyleSheet.create({
   logoutButton: {
     backgroundColor: 'rgba(255,255,255,0.12)',
     borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 11,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
   logoutText: {
     color: '#ffffff',
@@ -720,14 +713,14 @@ const styles = StyleSheet.create({
   menuButton: {
     alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.12)',
-    borderRadius: 14,
-    height: 44,
+    borderRadius: 13,
+    height: 40,
     justifyContent: 'center',
-    width: 44,
+    width: 40,
   },
   menuButtonText: {
     color: '#ffffff',
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '900',
   },
   safeArea: {

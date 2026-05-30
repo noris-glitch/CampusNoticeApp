@@ -15,17 +15,11 @@ import {
 } from 'react-native';
 import { Href, useLocalSearchParams, useRouter } from 'expo-router';
 
-import {
-  loadLandingPageCache,
-  fetchPublicSettings,
-  getApiErrorMessage,
-  landingBackgroundUrl,
-  loadSession,
-  loginWithPassword,
-  saveLandingPageCache,
-  saveSession,
-  warmUpServer,
-} from '@/config/api';
+import { getApiErrorMessage } from '@/config/api-analytics';
+import { fetchPublicSettings } from '@/config/api-public';
+import { loginWithPassword } from '@/config/api-auth';
+import { landingBackgroundUrl, warmUpServer } from '@/config/api-core';
+import { loadLandingPageCache, loadSession, saveLandingPageCache, saveSession } from '@/config/session-storage';
 
 const colors = {
   accent: '#0f7b6c',

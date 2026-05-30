@@ -1,26 +1,17 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-import { API_PATHS, apiUrl, getApiErrorMessage } from '../config/api';
+import { API_PATHS, apiUrl } from '../config/api-core';
+import { getApiErrorMessage } from '../config/api-analytics';
 
 export default function HomeScreen({ navigation }) {
   const [notices, setNotices] = useState([]);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadUser();
-    fetchNotices();
-  }, []);
-
-  const loadUser = async () => {
-    const userData = await AsyncStorage.getItem('user');
-    if (userData) setUser(JSON.parse(userData));
-  };
-
-  const fetchNotices = async () => {
+  const fetchNotices = useCallback(async () => {
     try {
       const userData = await AsyncStorage.getItem('user');
       if (!userData) {
@@ -45,7 +36,11 @@ export default function HomeScreen({ navigation }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [navigation]);
+
+  useEffect(() => {
+    void fetchNotices();
+  }, [fetchNotices]);
 
   const handleLogout = async () => {
     await AsyncStorage.removeItem('user');

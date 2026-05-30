@@ -22,24 +22,26 @@ import {
   deleteDepartment,
   deleteFaculty,
   deleteManagedUser,
-  EmergencyAlertItem,
   fetchEmergencyAlerts,
   fetchManageUsers,
   fetchStudentSyncInfo,
-  getApiErrorMessage,
-  landingBackgroundUrl,
+  updateLandingPageTheme,
+  updateManagedUser,
+  uploadLandingPageBackground,
+  uploadStudentSyncFile,
+} from '@/config/api-admin';
+import { getApiErrorMessage } from '@/config/api-analytics';
+import { landingBackgroundUrl } from '@/config/api-core';
+import type {
+  EmergencyAlertItem,
   ManageUsersResponse,
   ManagedUserItem,
   SimpleSuccessResponse,
   StoredUser,
   StudentSyncResponse,
-  updateManagedUser,
-  updateLandingPageTheme,
   UploadAsset,
-  uploadLandingPageBackground,
-  uploadStudentSyncFile,
   UserRole,
-} from '@/config/api';
+} from '@/config/api-types';
 
 const palette = {
   accent: '#0f7b6c',

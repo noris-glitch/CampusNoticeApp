@@ -13,14 +13,9 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 
-import {
-  DepartmentOption,
-  FacultyOption,
-  fetchRegistrationOptions,
-  getApiErrorMessage,
-  registerStudent,
-  YearOption,
-} from '@/config/api';
+import { getApiErrorMessage } from '@/config/api-analytics';
+import { fetchRegistrationOptions, registerStudent } from '@/config/api-auth';
+import type { DepartmentOption, FacultyOption, YearOption } from '@/config/api-types';
 
 const colors = {
   accent: '#0f7b6c',

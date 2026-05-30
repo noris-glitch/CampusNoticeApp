@@ -17,21 +17,19 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 
-import {
-  createShort,
+import { createShort, fetchShorts, runShortAction } from '@/config/api-admin';
+import { getApiErrorMessage } from '@/config/api-analytics';
+import { shortVideoUrl } from '@/config/api-core';
+import type {
   CreateShortPayload,
   DepartmentOption,
-  fetchShorts,
-  getApiErrorMessage,
-  runShortAction,
-  ShortsResponse,
-  shortVideoUrl,
   ShortItem,
+  ShortsResponse,
   StoredUser,
   UploadAsset,
   UserRole,
   YearOption,
-} from '@/config/api';
+} from '@/config/api-types';
 
 const palette = {
   accent: '#0f7b6c',
@@ -238,7 +236,7 @@ export default function ShortsSection({ isActive, onDirty, refreshToken, session
 
   const viewabilityConfigCallbackPairs = useRef([
     {
-      onViewableItemsChanged: ({ viewableItems }: { viewableItems: Array<ViewToken> }) => {
+      onViewableItemsChanged: ({ viewableItems }: { viewableItems: ViewToken[] }) => {
         const firstVisible = viewableItems.find((item) => item.isViewable)?.item as ShortItem | undefined;
         if (firstVisible?.id) {
           setActiveShortId(firstVisible.id);
