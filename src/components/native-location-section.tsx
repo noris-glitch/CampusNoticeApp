@@ -95,10 +95,11 @@ export default function LocationEventsSection({
   const featuredEvents = nearbyEvents.length ? nearbyEvents : hubEvents;
   const visibleFeaturedEvents = featuredEvents.slice(0, 12);
   const userLocation = hub?.user_location ?? null;
-  const mapHtml = buildMapHtml(hubEvents, userLocation);
+  const mapEvents = mode === 'nearby' && nearbyEvents.length ? nearbyEvents : hubEvents;
+  const mapHtml = buildMapHtml(mapEvents, userLocation);
   const intro = getLocationIntro(mode);
   const showShareTools = mode === 'hub' || mode === 'share' || mode === 'nearby';
-  const showMap = mode === 'hub' || mode === 'map';
+  const showMap = mode === 'hub' || mode === 'map' || mode === 'nearby';
   const showEvents = mode === 'hub' || mode === 'nearby';
 
   const handleShareCurrentLocation = async () => {
@@ -218,8 +219,10 @@ export default function LocationEventsSection({
         <>
           {showMap ? (
             <View style={styles.panel}>
-              <Text style={styles.sectionTitle}>Campus event map</Text>
-              {hubEvents.length > 0 ? (
+              <Text style={styles.sectionTitle}>
+                {mode === 'nearby' ? 'Nearby event map' : 'Campus event map'}
+              </Text>
+              {mapEvents.length > 0 ? (
                 <View style={styles.mapFrame}>
                   <WebView
                     domStorageEnabled
@@ -234,7 +237,7 @@ export default function LocationEventsSection({
                 <View style={styles.stateCard}>
                   <Text style={styles.emptyTitle}>No mapped events yet</Text>
                   <Text style={styles.stateText}>
-                    Once location-enabled notices are published, they will appear here automatically.
+                    Once nearby campus events are published, they will appear here automatically.
                   </Text>
                 </View>
               )}
@@ -244,10 +247,10 @@ export default function LocationEventsSection({
           {showEvents ? (
             <View style={styles.panel}>
               <Text style={styles.sectionTitle}>
-                {nearbyEvents.length > 0 ? 'Nearby events' : 'Location-enabled notices'}
+                {mode === 'nearby' ? 'Nearby events' : nearbyEvents.length > 0 ? 'Nearby events' : 'Location-enabled notices'}
               </Text>
               <Text style={styles.helper}>
-                {nearbyEvents.length > 0
+                {mode === 'nearby' || nearbyEvents.length > 0
                   ? 'Events inside the saved-radius view for your campus location.'
                   : 'These notices have map coordinates and can be explored on the campus map.'}
               </Text>

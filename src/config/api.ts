@@ -238,6 +238,18 @@ export interface AdminDashboardData {
   };
   open_questions: number;
   pending_approvals: number;
+  notice_audit_trail?: Array<{
+    action: string;
+    after_status?: string | null;
+    actor_name: string;
+    actor_role?: UserRole | null;
+    before_status?: string | null;
+    created_at: string;
+    details?: string | null;
+    id: number;
+    notice_id: number;
+    notice_title: string;
+  }>;
   recent_notices: NoticeItem[];
   recent_students: Array<{
     created_at: string;

@@ -288,6 +288,38 @@ export function AdminDashboardSection({
       </Panel>
 
       <Panel>
+        <Text style={styles.sectionTitle}>Notice audit trail</Text>
+        <Text style={styles.bodyText}>
+          Recent notice creation, update, publish, approval, archive, and deletion activity.
+        </Text>
+        {(dashboard.notice_audit_trail || []).length === 0 ? (
+          <Text style={styles.mutedText}>No audit entries yet.</Text>
+        ) : (
+          (dashboard.notice_audit_trail || []).map((entry) => (
+            <View key={entry.id} style={styles.listRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.listTitle}>
+                  {formatNoticeAuditAction(entry.action)} · {entry.notice_title}
+                </Text>
+                <Text style={styles.listMeta}>
+                  {entry.actor_name}
+                  {entry.actor_role ? ` · ${entry.actor_role}` : ''}
+                  {' · '}
+                  {formatDateLabel(entry.created_at)}
+                </Text>
+                {entry.details ? <Text style={styles.helperText}>{entry.details}</Text> : null}
+              </View>
+              {entry.after_status ? (
+                <View style={styles.auditStatusPill}>
+                  <Text style={styles.auditStatusText}>{entry.after_status}</Text>
+                </View>
+              ) : null}
+            </View>
+          ))
+        )}
+      </Panel>
+
+      <Panel>
         <Text style={styles.sectionTitle}>Recent notices</Text>
         {dashboard.recent_notices.length === 0 ? (
           <Text style={styles.mutedText}>No notices yet.</Text>
@@ -1378,6 +1410,14 @@ function formatDateLabel(value?: string | null) {
   return date.toLocaleString();
 }
 
+function formatNoticeAuditAction(action: string) {
+  return action
+    .replace(/^mobile_/, '')
+    .replace(/^notice_/, '')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
 function escapeHtml(value: string) {
   return value
     .replace(/&/g, '&amp;')
@@ -1847,6 +1887,26 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 19,
     marginTop: 8,
+  },
+  bodyText: {
+    color: palette.ink,
+    fontSize: 14,
+    lineHeight: 21,
+    marginBottom: 8,
+  },
+  auditStatusPill: {
+    alignSelf: 'flex-start',
+    backgroundColor: palette.warm,
+    borderRadius: 999,
+    marginLeft: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  auditStatusText: {
+    color: palette.accent,
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase',
   },
   input: {
     backgroundColor: palette.bg,
