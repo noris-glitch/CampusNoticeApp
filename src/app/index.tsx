@@ -13,6 +13,8 @@ import {
   View,
 } from 'react-native';
 import { Href, useLocalSearchParams, useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { getApiErrorMessage } from '@/config/api-analytics';
 import { fetchPublicSettings } from '@/config/api-public';
@@ -166,94 +168,112 @@ export default function LoginScreen() {
     );
   }
 
-  const authContent = (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={styles.screen}
-    >
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Welcome back</Text>
-          <Text style={styles.cardSubtitle}>
-            Use your email and password to continue.
-          </Text>
-
-          <Text style={styles.label}>Email address</Text>
-          <TextInput
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="email-address"
-            placeholder="you@jooust.ac.ke"
-            placeholderTextColor={colors.muted}
-            style={styles.input}
-            value={email}
-            onChangeText={setEmail}
-          />
-
-          <Text style={styles.label}>Password</Text>
-          <View style={styles.passwordRow}>
-            <TextInput
-              autoCapitalize="none"
-              autoCorrect={false}
-              placeholder="Your password"
-              placeholderTextColor={colors.muted}
-              secureTextEntry={!showPassword}
-              style={styles.passwordInput}
-              value={password}
-              onChangeText={setPassword}
-            />
-            <Pressable onPress={() => setShowPassword((current) => !current)} style={styles.passwordToggle}>
-              <Text style={styles.passwordToggleText}>{showPassword ? 'Hide' : 'Show'}</Text>
-            </Pressable>
-          </View>
-
-          <Pressable disabled={loading} onPress={() => void handleLogin()} style={styles.primaryButton}>
-            {loading ? (
-              <ActivityIndicator color="#ffffff" />
-            ) : (
-              <Text style={styles.primaryButtonText}>Sign in</Text>
-            )}
-          </Pressable>
-
-          <Pressable onPress={() => router.push('/forgot-password' as Href)} style={styles.inlineLink}>
-            <Text style={styles.inlineLinkText}>Forgot password?</Text>
-          </Pressable>
-
-          <View style={styles.dividerRow}>
-            <View style={styles.divider} />
-            <Text style={styles.dividerText}>New here?</Text>
-            <View style={styles.divider} />
-          </View>
-
-          <Pressable onPress={() => router.push('/register' as Href)} style={styles.secondaryButton}>
-            <Text style={styles.secondaryButtonText}>Create student account</Text>
-          </Pressable>
-
-          <View style={styles.supportCard}>
-            <Text style={styles.supportTitle}>
-              Need help getting in?
-            </Text>
-            <Text style={styles.supportText}>
-              First login may take a few seconds if the Render backend is waking up. If you are an admin without an account, contact the system administrator.
-            </Text>
-          </View>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
-  );
-
   return (
-    <View style={[styles.screenShell, { backgroundColor }]}>
-      {backgroundImageSource && landingSettingsReady ? (
-        <ImageBackground source={backgroundImageSource} style={styles.backgroundImage} imageStyle={styles.backgroundImageLayer}>
-          <View style={styles.backgroundOverlay}>{authContent}</View>
-        </ImageBackground>
-      ) : (
-        <View style={[styles.backgroundFallback, { backgroundColor }]}>
-          <View style={styles.backgroundOverlay}>{authContent}</View>
+    <SafeAreaView edges={['top', 'right', 'left']} style={[styles.safeArea, { backgroundColor }]}>
+      <StatusBar style="light" />
+
+      <View style={styles.screenShell}>
+        <View style={[styles.hero, { backgroundColor }]}>
+          {backgroundImageSource && landingSettingsReady ? (
+            <ImageBackground
+              source={backgroundImageSource}
+              style={styles.heroImage}
+              imageStyle={styles.heroImageLayer}
+            >
+              <View style={styles.heroOverlay}>
+                <Text style={styles.heroBrand}>JOOUST CAMPUS NOTICE</Text>
+                <Text style={styles.heroTitle}>Welcome to JOOUST Campus Notice</Text>
+                <Text style={styles.heroSubtitle}>
+                  Sign in to continue to your campus notices, alerts, and updates.
+                </Text>
+              </View>
+            </ImageBackground>
+          ) : (
+            <View style={styles.heroFallback}>
+              <Text style={styles.heroBrand}>JOOUST CAMPUS NOTICE</Text>
+              <Text style={styles.heroTitle}>Welcome to JOOUST Campus Notice</Text>
+              <Text style={styles.heroSubtitle}>
+                Sign in to continue to your campus notices, alerts, and updates.
+              </Text>
+            </View>
+          )}
         </View>
-      )}
-    </View>
+
+        <View style={styles.formArea}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={styles.screen}
+          >
+            <ScrollView
+              contentContainerStyle={styles.scrollContent}
+              keyboardShouldPersistTaps="handled"
+            >
+              <View style={styles.card}>
+                <Text style={styles.cardEyebrow}>JOOUST Campus Notice</Text>
+                <Text style={styles.cardTitle}>Welcome back</Text>
+                <Text style={styles.cardSubtitle}>
+                  Use your email and password to continue.
+                </Text>
+
+                <Text style={styles.label}>Email address</Text>
+                <TextInput
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="email-address"
+                  placeholder="you@jooust.ac.ke"
+                  placeholderTextColor={colors.muted}
+                  style={styles.input}
+                  value={email}
+                  onChangeText={setEmail}
+                />
+
+                <Text style={styles.label}>Password</Text>
+                <View style={styles.passwordRow}>
+                  <TextInput
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    placeholder="Your password"
+                    placeholderTextColor={colors.muted}
+                    secureTextEntry={!showPassword}
+                    style={styles.passwordInput}
+                    value={password}
+                    onChangeText={setPassword}
+                  />
+                  <Pressable
+                    onPress={() => setShowPassword((current) => !current)}
+                    style={styles.passwordToggle}
+                  >
+                    <Text style={styles.passwordToggleText}>{showPassword ? 'Hide' : 'Show'}</Text>
+                  </Pressable>
+                </View>
+
+                <Pressable disabled={loading} onPress={() => void handleLogin()} style={styles.primaryButton}>
+                  {loading ? (
+                    <ActivityIndicator color="#ffffff" />
+                  ) : (
+                    <Text style={styles.primaryButtonText}>Sign in</Text>
+                  )}
+                </Pressable>
+
+                <Pressable onPress={() => router.push('/forgot-password' as Href)} style={styles.inlineLink}>
+                  <Text style={styles.inlineLinkText}>Forgot password?</Text>
+                </Pressable>
+
+                <View style={styles.dividerRow}>
+                  <View style={styles.divider} />
+                  <Text style={styles.dividerText}>New here?</Text>
+                  <View style={styles.divider} />
+                </View>
+
+                <Pressable onPress={() => router.push('/register' as Href)} style={styles.secondaryButton}>
+                  <Text style={styles.secondaryButtonText}>Sign up</Text>
+                </Pressable>
+              </View>
+            </ScrollView>
+          </KeyboardAvoidingView>
+        </View>
+      </View>
+    </SafeAreaView>
   );
 }
 
@@ -268,6 +288,14 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     width: '100%',
     maxWidth: 420,
+  },
+  cardEyebrow: {
+    color: colors.accent,
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 1,
+    marginBottom: 8,
+    textTransform: 'uppercase',
   },
   cardSubtitle: {
     color: colors.muted,
@@ -335,6 +363,62 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 12,
   },
+  formArea: {
+    backgroundColor: colors.page,
+    flex: 1,
+    marginTop: -30,
+    paddingHorizontal: 20,
+    paddingTop: 24,
+  },
+  hero: {
+    height: 280,
+  },
+  heroFallback: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    paddingHorizontal: 20,
+    paddingVertical: 28,
+  },
+  heroBrand: {
+    color: '#d8f5ef',
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 1.4,
+    marginBottom: 10,
+    textTransform: 'uppercase',
+  },
+  heroImage: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  heroImageLayer: {
+    resizeMode: 'cover',
+    opacity: 0.9,
+  },
+  heroOverlay: {
+    backgroundColor: 'rgba(9, 20, 33, 0.54)',
+    justifyContent: 'flex-end',
+    height: 280,
+    paddingHorizontal: 20,
+    paddingVertical: 28,
+  },
+  heroSubtitle: {
+    color: '#d8e6f2',
+    fontSize: 14,
+    lineHeight: 20,
+    maxWidth: 360,
+  },
+  heroTitle: {
+    color: '#ffffff',
+    fontSize: 30,
+    fontWeight: '900',
+    lineHeight: 36,
+    marginBottom: 10,
+    maxWidth: 360,
+  },
+  safeArea: {
+    flex: 1,
+  },
   passwordInput: {
     color: colors.ink,
     flex: 1,
@@ -398,9 +482,8 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 28,
+    justifyContent: 'flex-start',
+    paddingBottom: 28,
   },
   secondaryButton: {
     alignItems: 'center',
@@ -413,34 +496,6 @@ const styles = StyleSheet.create({
     color: colors.accent,
     fontSize: 15,
     fontWeight: '800',
-  },
-  supportCard: {
-    backgroundColor: colors.page,
-    borderRadius: 18,
-    marginTop: 18,
-    padding: 16,
-  },
-  supportCardDark: {
-    backgroundColor: '#0b1523',
-    borderColor: '#233548',
-    borderWidth: 1,
-  },
-  supportText: {
-    color: colors.muted,
-    fontSize: 13,
-    lineHeight: 19,
-    marginTop: 6,
-  },
-  supportTitle: {
-    color: colors.ink,
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  supportTitleDark: {
-    color: '#eff6ff',
-  },
-  supportTextDark: {
-    color: '#b8c8d9',
   },
   cardDark: {
     backgroundColor: '#0f1e30',

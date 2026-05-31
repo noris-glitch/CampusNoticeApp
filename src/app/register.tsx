@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  ImageBackground,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -12,10 +13,15 @@ import {
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { getApiErrorMessage } from '@/config/api-analytics';
 import { fetchRegistrationOptions, registerStudent } from '@/config/api-auth';
+import { fetchPublicSettings } from '@/config/api-public';
+import { landingBackgroundUrl, warmUpServer } from '@/config/api-core';
 import type { DepartmentOption, FacultyOption, YearOption } from '@/config/api-types';
+import { loadLandingPageCache, saveLandingPageCache } from '@/config/session-storage';
 
 const colors = {
   accent: '#0f7b6c',
@@ -65,6 +71,9 @@ export default function RegisterScreen() {
   const [saving, setSaving] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [backgroundColor, setBackgroundColor] = useState('#17324D');
+  const [backgroundImageUrl, setBackgroundImageUrl] = useState<string | null>(null);
+  const [landingSettingsReady, setLandingSettingsReady] = useState(false);
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -103,6 +112,69 @@ export default function RegisterScreen() {
     }
 
     void loadOptions();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadPublicSettings() {
+      const cached = await loadLandingPageCache().catch(() => null);
+      if (isMounted && cached) {
+        setBackgroundColor(cached.background_color || '#17324D');
+        setBackgroundImageUrl(landingBackgroundUrl(cached.background_image_url, cached.background_image));
+        setLandingSettingsReady(true);
+      }
+
+      const applySettings = (response: Awaited<ReturnType<typeof fetchPublicSettings>>) => {
+        const nextColor = response.landing_page.background_color || '#17324D';
+        const nextImage = landingBackgroundUrl(
+          response.landing_page.background_image_url,
+          response.landing_page.background_image
+        );
+
+        setBackgroundColor(nextColor);
+        setBackgroundImageUrl(nextImage || null);
+        setLandingSettingsReady(true);
+        void saveLandingPageCache({
+          background_color: nextColor,
+          background_image: response.landing_page.background_image,
+          background_image_url: response.landing_page.background_image_url,
+        });
+      };
+
+      await warmUpServer().catch(() => {
+        // Best effort while the backend wakes up.
+      });
+
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          const response = await fetchPublicSettings();
+          if (!isMounted) {
+            return;
+          }
+
+          applySettings(response);
+          return;
+        } catch {
+          if (!isMounted || attempt === 1) {
+            break;
+          }
+
+          await new Promise((resolve) => setTimeout(resolve, 900));
+        }
+      }
+
+      if (isMounted) {
+        setBackgroundColor('#17324D');
+        setBackgroundImageUrl(null);
+        setLandingSettingsReady(true);
+      }
+    }
+
+    void loadPublicSettings();
     return () => {
       isMounted = false;
     };
@@ -169,7 +241,7 @@ export default function RegisterScreen() {
         year: selectedYear,
       });
 
-      Alert.alert('Register', response.message || 'Account created successfully.', [
+      Alert.alert('Sign up', response.message || 'Your account has been created.', [
         {
           text: 'Continue to login',
           onPress: () => {
@@ -181,190 +253,230 @@ export default function RegisterScreen() {
         },
       ]);
     } catch (registerError) {
-      Alert.alert('Register', getApiErrorMessage(registerError, 'Could not create your account right now.'));
+      Alert.alert('Sign up', getApiErrorMessage(registerError, 'Could not create your account right now.'));
     } finally {
       setSaving(false);
     }
   };
 
-  return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={[styles.screen, isDark ? styles.screenDark : null]}
-    >
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-        <View style={styles.hero}>
-          <Text style={[styles.kicker, isDark ? styles.kickerDark : null]}>Student Sign Up</Text>
-          <Text style={[styles.title, isDark ? styles.titleDark : null]}>Create your JOOUST notice account.</Text>
-          <Text style={[styles.subtitle, isDark ? styles.subtitleDark : null]}>
-            Register once to receive notices, bookmarks, alerts, and campus event updates inside the app.
-          </Text>
-        </View>
+  const backgroundImageSource = backgroundImageUrl ? { uri: backgroundImageUrl } : null;
 
-        <View style={[styles.card, isDark ? styles.cardDark : null]}>
-          {loading ? (
-            <View style={styles.loadingBlock}>
-              <ActivityIndicator color={colors.accent} />
-              <Text style={[styles.loadingText, isDark ? styles.loadingTextDark : null]}>
-                Loading registration options...
+  return (
+    <SafeAreaView edges={['top', 'right', 'left']} style={[styles.safeArea, { backgroundColor }]}>
+      <StatusBar style="light" />
+
+      <View style={styles.screenShell}>
+        <View style={[styles.hero, { backgroundColor }]}>
+          {backgroundImageSource && landingSettingsReady ? (
+            <ImageBackground
+              source={backgroundImageSource}
+              style={styles.heroImage}
+              imageStyle={styles.heroImageLayer}
+            >
+              <View style={styles.heroOverlay}>
+                <Text style={styles.heroBrand}>JOOUST CAMPUS NOTICE</Text>
+                <Text style={styles.heroTitle}>Sign up for JOOUST Campus Notice</Text>
+                <Text style={styles.heroSubtitle}>
+                  Create your account to get notices, alerts, bookmarks, and campus updates in one place.
+                </Text>
+              </View>
+            </ImageBackground>
+          ) : (
+            <View style={styles.heroFallback}>
+              <Text style={styles.heroBrand}>JOOUST CAMPUS NOTICE</Text>
+              <Text style={styles.heroTitle}>Sign up for JOOUST Campus Notice</Text>
+              <Text style={styles.heroSubtitle}>
+                Create your account to get notices, alerts, bookmarks, and campus updates in one place.
               </Text>
             </View>
-          ) : (
-            <>
-              <Text style={[styles.cardTitle, isDark ? styles.cardTitleDark : null]}>Create account</Text>
-
-              <Text style={[styles.label, isDark ? styles.labelDark : null]}>Full name</Text>
-              <TextInput style={[styles.input, isDark ? styles.inputDark : null]} value={name} onChangeText={setName} />
-
-              <Text style={[styles.label, isDark ? styles.labelDark : null]}>Email address</Text>
-              <TextInput
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="email-address"
-                style={[styles.input, isDark ? styles.inputDark : null]}
-                value={email}
-                onChangeText={setEmail}
-              />
-
-              <Text style={[styles.label, isDark ? styles.labelDark : null]}>Student ID</Text>
-              <TextInput
-                autoCapitalize="characters"
-                autoCorrect={false}
-                style={[styles.input, isDark ? styles.inputDark : null]}
-                value={studentId}
-                onChangeText={setStudentId}
-              />
-
-              <Text style={[styles.label, isDark ? styles.labelDark : null]}>Phone number</Text>
-              <TextInput
-                keyboardType="phone-pad"
-                placeholder="+2547..."
-                placeholderTextColor={colors.muted}
-                style={[styles.input, isDark ? styles.inputDark : null]}
-                value={phoneNumber}
-                onChangeText={setPhoneNumber}
-              />
-
-              <Text style={[styles.label, isDark ? styles.labelDark : null]}>Faculty</Text>
-              <View style={styles.wrapRow}>
-                {faculties.map((faculty) => (
-                  <ChoiceChip
-                    key={faculty.id}
-                    active={selectedFaculty === faculty.id}
-                    label={faculty.name}
-                    onPress={() => {
-                      setSelectedFaculty(faculty.id);
-                      setCustomDepartment('');
-                    }}
-                  />
-                ))}
-              </View>
-
-              <Text style={[styles.label, isDark ? styles.labelDark : null]}>Department</Text>
-              <View style={styles.wrapRow}>
-                <ChoiceChip
-                  active={selectedDepartment === null}
-                  label="Select later"
-                  onPress={() => setSelectedDepartment(null)}
-                />
-                {visibleDepartments.map((department) => (
-                  <ChoiceChip
-                    key={department.id}
-                    active={selectedDepartment === department.id}
-                    label={department.name}
-                    onPress={() => {
-                      setSelectedDepartment(department.id);
-                      setCustomDepartment('');
-                    }}
-                  />
-                ))}
-              </View>
-              <TextInput
-                placeholder="Or type your department name"
-                placeholderTextColor={colors.muted}
-                style={[styles.input, isDark ? styles.inputDark : null]}
-                value={customDepartment}
-                onChangeText={(value) => {
-                  setCustomDepartment(value);
-                  if (value.trim() !== '') {
-                    setSelectedDepartment(null);
-                  }
-                }}
-              />
-
-              <Text style={[styles.label, isDark ? styles.labelDark : null]}>Year of study</Text>
-              <View style={styles.wrapRow}>
-                {years.map((year) => (
-                  <ChoiceChip
-                    key={year.value}
-                    active={selectedYear === year.value}
-                    label={year.label}
-                    onPress={() => setSelectedYear(year.value)}
-                  />
-                ))}
-              </View>
-
-              <Text style={[styles.label, isDark ? styles.labelDark : null]}>Membership or leadership role</Text>
-              <TextInput
-                placeholder="Optional"
-                placeholderTextColor={colors.muted}
-                style={[styles.input, isDark ? styles.inputDark : null]}
-                value={membership}
-                onChangeText={setMembership}
-              />
-
-              <Text style={[styles.label, isDark ? styles.labelDark : null]}>Password</Text>
-              <View style={[styles.passwordRow, isDark ? styles.passwordRowDark : null]}>
-                <TextInput
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  secureTextEntry={!showPassword}
-                  style={[styles.passwordInput, isDark ? styles.passwordInputDark : null]}
-                  value={password}
-                  onChangeText={setPassword}
-                />
-                <Pressable onPress={() => setShowPassword((current) => !current)} style={styles.passwordToggle}>
-                  <Text style={styles.passwordToggleText}>{showPassword ? 'Hide' : 'Show'}</Text>
-                </Pressable>
-              </View>
-
-              <View style={styles.requirementsCard}>
-                {passwordChecks.map((item) => (
-                  <Requirement key={item.label} label={item.label} valid={item.valid} />
-                ))}
-              </View>
-
-              <Text style={[styles.label, isDark ? styles.labelDark : null]}>Confirm password</Text>
-              <View style={[styles.passwordRow, isDark ? styles.passwordRowDark : null]}>
-                <TextInput
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  secureTextEntry={!showConfirmPassword}
-                  style={[styles.passwordInput, isDark ? styles.passwordInputDark : null]}
-                  value={confirmPassword}
-                  onChangeText={setConfirmPassword}
-                />
-                <Pressable onPress={() => setShowConfirmPassword((current) => !current)} style={styles.passwordToggle}>
-                  <Text style={styles.passwordToggleText}>{showConfirmPassword ? 'Hide' : 'Show'}</Text>
-                </Pressable>
-              </View>
-
-              <Pressable disabled={saving} onPress={() => void handleRegister()} style={styles.primaryButton}>
-                {saving ? (
-                  <ActivityIndicator color="#ffffff" />
-                ) : (
-                  <Text style={styles.primaryButtonText}>Create account</Text>
-                )}
-              </Pressable>
-
-              <Pressable onPress={() => router.replace('/')} style={styles.inlineLink}>
-                <Text style={styles.inlineLinkText}>Already have an account? Sign in</Text>
-              </Pressable>
-            </>
           )}
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+
+        <View style={styles.formArea}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={styles.screen}
+          >
+            <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+              <View style={[styles.card, isDark ? styles.cardDark : null]}>
+                {loading ? (
+                  <View style={styles.loadingBlock}>
+                    <ActivityIndicator color={colors.accent} />
+                    <Text style={[styles.loadingText, isDark ? styles.loadingTextDark : null]}>
+                      Loading sign up options...
+                    </Text>
+                  </View>
+                ) : (
+                  <>
+                    <Text style={[styles.cardEyebrow, isDark ? styles.cardEyebrowDark : null]}>
+                      JOOUST Campus Notice
+                    </Text>
+                    <Text style={[styles.cardTitle, isDark ? styles.cardTitleDark : null]}>Sign up</Text>
+
+                    <Text style={[styles.label, isDark ? styles.labelDark : null]}>Full name</Text>
+                    <TextInput
+                      style={[styles.input, isDark ? styles.inputDark : null]}
+                      value={name}
+                      onChangeText={setName}
+                    />
+
+                    <Text style={[styles.label, isDark ? styles.labelDark : null]}>Email address</Text>
+                    <TextInput
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      keyboardType="email-address"
+                      style={[styles.input, isDark ? styles.inputDark : null]}
+                      value={email}
+                      onChangeText={setEmail}
+                    />
+
+                    <Text style={[styles.label, isDark ? styles.labelDark : null]}>Student ID</Text>
+                    <TextInput
+                      autoCapitalize="characters"
+                      autoCorrect={false}
+                      style={[styles.input, isDark ? styles.inputDark : null]}
+                      value={studentId}
+                      onChangeText={setStudentId}
+                    />
+
+                    <Text style={[styles.label, isDark ? styles.labelDark : null]}>Phone number</Text>
+                    <TextInput
+                      keyboardType="phone-pad"
+                      placeholder="+2547..."
+                      placeholderTextColor={colors.muted}
+                      style={[styles.input, isDark ? styles.inputDark : null]}
+                      value={phoneNumber}
+                      onChangeText={setPhoneNumber}
+                    />
+
+                    <Text style={[styles.label, isDark ? styles.labelDark : null]}>Faculty</Text>
+                    <View style={styles.wrapRow}>
+                      {faculties.map((faculty) => (
+                        <ChoiceChip
+                          key={faculty.id}
+                          active={selectedFaculty === faculty.id}
+                          label={faculty.name}
+                          onPress={() => {
+                            setSelectedFaculty(faculty.id);
+                            setCustomDepartment('');
+                          }}
+                        />
+                      ))}
+                    </View>
+
+                    <Text style={[styles.label, isDark ? styles.labelDark : null]}>Department</Text>
+                    <View style={styles.wrapRow}>
+                      <ChoiceChip
+                        active={selectedDepartment === null}
+                        label="Select later"
+                        onPress={() => setSelectedDepartment(null)}
+                      />
+                      {visibleDepartments.map((department) => (
+                        <ChoiceChip
+                          key={department.id}
+                          active={selectedDepartment === department.id}
+                          label={department.name}
+                          onPress={() => {
+                            setSelectedDepartment(department.id);
+                            setCustomDepartment('');
+                          }}
+                        />
+                      ))}
+                    </View>
+                    <TextInput
+                      placeholder="Or type your department name"
+                      placeholderTextColor={colors.muted}
+                      style={[styles.input, isDark ? styles.inputDark : null]}
+                      value={customDepartment}
+                      onChangeText={(value) => {
+                        setCustomDepartment(value);
+                        if (value.trim() !== '') {
+                          setSelectedDepartment(null);
+                        }
+                      }}
+                    />
+
+                    <Text style={[styles.label, isDark ? styles.labelDark : null]}>Year of study</Text>
+                    <View style={styles.wrapRow}>
+                      {years.map((year) => (
+                        <ChoiceChip
+                          key={year.value}
+                          active={selectedYear === year.value}
+                          label={year.label}
+                          onPress={() => setSelectedYear(year.value)}
+                        />
+                      ))}
+                    </View>
+
+                    <Text style={[styles.label, isDark ? styles.labelDark : null]}>
+                      Membership or leadership role
+                    </Text>
+                    <TextInput
+                      placeholder="Optional"
+                      placeholderTextColor={colors.muted}
+                      style={[styles.input, isDark ? styles.inputDark : null]}
+                      value={membership}
+                      onChangeText={setMembership}
+                    />
+
+                    <Text style={[styles.label, isDark ? styles.labelDark : null]}>Password</Text>
+                    <View style={[styles.passwordRow, isDark ? styles.passwordRowDark : null]}>
+                      <TextInput
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        secureTextEntry={!showPassword}
+                        style={[styles.passwordInput, isDark ? styles.passwordInputDark : null]}
+                        value={password}
+                        onChangeText={setPassword}
+                      />
+                      <Pressable onPress={() => setShowPassword((current) => !current)} style={styles.passwordToggle}>
+                        <Text style={styles.passwordToggleText}>{showPassword ? 'Hide' : 'Show'}</Text>
+                      </Pressable>
+                    </View>
+
+                    <View style={styles.requirementsCard}>
+                      {passwordChecks.map((item) => (
+                        <Requirement key={item.label} label={item.label} valid={item.valid} />
+                      ))}
+                    </View>
+
+                    <Text style={[styles.label, isDark ? styles.labelDark : null]}>Confirm password</Text>
+                    <View style={[styles.passwordRow, isDark ? styles.passwordRowDark : null]}>
+                      <TextInput
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        secureTextEntry={!showConfirmPassword}
+                        style={[styles.passwordInput, isDark ? styles.passwordInputDark : null]}
+                        value={confirmPassword}
+                        onChangeText={setConfirmPassword}
+                      />
+                      <Pressable
+                        onPress={() => setShowConfirmPassword((current) => !current)}
+                        style={styles.passwordToggle}
+                      >
+                        <Text style={styles.passwordToggleText}>{showConfirmPassword ? 'Hide' : 'Show'}</Text>
+                      </Pressable>
+                    </View>
+
+                    <Pressable disabled={saving} onPress={() => void handleRegister()} style={styles.primaryButton}>
+                      {saving ? (
+                        <ActivityIndicator color="#ffffff" />
+                      ) : (
+                        <Text style={styles.primaryButtonText}>Sign up</Text>
+                      )}
+                    </Pressable>
+
+                    <Pressable onPress={() => router.replace('/')} style={styles.inlineLink}>
+                      <Text style={styles.inlineLinkText}>Already have an account? Sign in</Text>
+                    </Pressable>
+                  </>
+                )}
+              </View>
+            </ScrollView>
+          </KeyboardAvoidingView>
+        </View>
+      </View>
+    </SafeAreaView>
   );
 }
 
@@ -378,11 +490,23 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 12,
     width: '100%',
+    maxWidth: 420,
   },
   cardDark: {
     backgroundColor: '#0f1e30',
     borderColor: '#233548',
     borderWidth: 1,
+  },
+  cardEyebrow: {
+    color: colors.accent,
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 1,
+    marginBottom: 8,
+    textTransform: 'uppercase',
+  },
+  cardEyebrowDark: {
+    color: '#7fe0cb',
   },
   cardTitle: {
     color: colors.ink,
@@ -413,8 +537,50 @@ const styles = StyleSheet.create({
     color: '#ffffff',
   },
   hero: {
-    marginBottom: 24,
-    width: '100%',
+    height: 280,
+  },
+  heroBrand: {
+    color: '#d8f5ef',
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 1.4,
+    marginBottom: 10,
+    textTransform: 'uppercase',
+  },
+  heroFallback: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    paddingHorizontal: 20,
+    paddingVertical: 28,
+  },
+  heroImage: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  heroImageLayer: {
+    opacity: 0.9,
+    resizeMode: 'cover',
+  },
+  heroOverlay: {
+    backgroundColor: 'rgba(9, 20, 33, 0.54)',
+    height: 280,
+    justifyContent: 'flex-end',
+    paddingHorizontal: 20,
+    paddingVertical: 28,
+  },
+  heroSubtitle: {
+    color: '#d8e6f2',
+    fontSize: 14,
+    lineHeight: 20,
+    maxWidth: 360,
+  },
+  heroTitle: {
+    color: '#ffffff',
+    fontSize: 30,
+    fontWeight: '900',
+    lineHeight: 36,
+    marginBottom: 10,
+    maxWidth: 360,
   },
   inlineLink: {
     alignSelf: 'center',
@@ -470,6 +636,13 @@ const styles = StyleSheet.create({
   },
   loadingTextDark: {
     color: '#b8c8d9',
+  },
+  formArea: {
+    backgroundColor: colors.page,
+    flex: 1,
+    marginTop: -30,
+    paddingHorizontal: 20,
+    paddingTop: 24,
   },
   passwordInput: {
     color: colors.ink,
@@ -546,16 +719,23 @@ const styles = StyleSheet.create({
     marginTop: 10,
     padding: 14,
   },
+  safeArea: {
+    flex: 1,
+  },
   screen: {
-    backgroundColor: colors.page,
+    backgroundColor: 'transparent',
     flex: 1,
   },
   screenDark: {
     backgroundColor: '#091421',
   },
+  screenShell: {
+    flex: 1,
+  },
   scrollContent: {
     flexGrow: 1,
-    padding: 20,
+    justifyContent: 'flex-start',
+    paddingBottom: 28,
   },
   subtitle: {
     color: colors.muted,
