@@ -33,6 +33,8 @@ const colors = {
   warm: '#ff8a5b',
 };
 
+const fallbackBackgroundImage = require('../../assets/images/logo-glow.png');
+
 export default function LoginScreen() {
   const params = useLocalSearchParams<{ email?: string }>();
   const router = useRouter();
@@ -43,8 +45,10 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [backgroundColor, setBackgroundColor] = useState('#17324D');
   const [backgroundImageUrl, setBackgroundImageUrl] = useState<string | null>(null);
+  const [backgroundImageFailed, setBackgroundImageFailed] = useState(false);
   const [landingSettingsReady, setLandingSettingsReady] = useState(false);
-  const backgroundImageSource = backgroundImageUrl ? { uri: backgroundImageUrl } : null;
+  const backgroundImageSource =
+    backgroundImageUrl && !backgroundImageFailed ? { uri: backgroundImageUrl } : fallbackBackgroundImage;
 
   useEffect(() => {
     if (typeof params.email === 'string' && params.email.trim() !== '') {
@@ -83,6 +87,7 @@ export default function LoginScreen() {
       if (isMounted && cached) {
         setBackgroundColor(cached.background_color || '#17324D');
         setBackgroundImageUrl(landingBackgroundUrl(cached.background_image_url, cached.background_image));
+        setBackgroundImageFailed(false);
         setLandingSettingsReady(true);
       }
 
@@ -95,6 +100,7 @@ export default function LoginScreen() {
 
         setBackgroundColor(nextColor);
         setBackgroundImageUrl(nextImage || null);
+        setBackgroundImageFailed(false);
         setLandingSettingsReady(true);
         void saveLandingPageCache({
           background_color: nextColor,
@@ -128,6 +134,7 @@ export default function LoginScreen() {
       if (isMounted) {
         setBackgroundColor('#17324D');
         setBackgroundImageUrl(null);
+        setBackgroundImageFailed(false);
         setLandingSettingsReady(true);
       }
     }
@@ -179,6 +186,7 @@ export default function LoginScreen() {
               source={backgroundImageSource}
               style={styles.heroImage}
               imageStyle={styles.heroImageLayer}
+              onError={() => setBackgroundImageFailed(true)}
             >
               <View style={styles.heroOverlay}>
                 <Text style={styles.heroBrand}>JOOUST CAMPUS NOTICE</Text>

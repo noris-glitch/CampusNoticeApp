@@ -42,6 +42,12 @@ import type {
   UploadAsset,
   UserRole,
 } from '@/config/api-types';
+import {
+  isValidLocalPhoneNumber,
+  isValidStudentId,
+  sanitizePhoneInput,
+  sanitizeStudentIdInput,
+} from '@/utils/validation';
 
 const palette = {
   accent: '#0f7b6c',
@@ -552,6 +558,16 @@ export function ManageUsersSection({ isActive, onDirty, refreshToken, session }:
       return;
     }
 
+    if (!isValidStudentId(draft.student_id.trim())) {
+      Alert.alert('Users', 'Student or staff IDs must use the format XXXX/X/XXXX/XX.');
+      return;
+    }
+
+    if (draft.phone_number.trim() !== '' && !isValidLocalPhoneNumber(draft.phone_number.trim())) {
+      Alert.alert('Users', 'Phone number must be exactly 10 digits and start with 0.');
+      return;
+    }
+
     if (!draft.user_id && draft.password.trim().length < 6) {
       Alert.alert('Users', 'New users need a password of at least 6 characters.');
       return;
@@ -670,20 +686,27 @@ export function ManageUsersSection({ isActive, onDirty, refreshToken, session }:
         />
         <Text style={styles.label}>Phone number</Text>
         <TextInput
-          keyboardType="phone-pad"
-          placeholder="+2547..."
+          keyboardType="number-pad"
+          maxLength={10}
+          placeholder="0712345678"
           placeholderTextColor={palette.muted}
           style={styles.input}
           value={draft.phone_number}
-          onChangeText={(value) => setDraftField('phone_number', value)}
+          onChangeText={(value) => setDraftField('phone_number', sanitizePhoneInput(value))}
         />
         <Text style={styles.label}>Student or staff ID</Text>
         <TextInput
           editable={!draft.user_id}
+          autoCapitalize="characters"
+          autoCorrect={false}
+          maxLength={13}
+          placeholder="I231/P/5872/22"
+          placeholderTextColor={palette.muted}
           style={[styles.input, draft.user_id ? styles.inputMuted : null]}
           value={draft.student_id}
-          onChangeText={(value) => setDraftField('student_id', value)}
+          onChangeText={(value) => setDraftField('student_id', sanitizeStudentIdInput(value))}
         />
+        <Text style={styles.helperText}>Student IDs use the format XXXX/X/XXXX/XX.</Text>
         {!draft.user_id ? (
           <>
             <Text style={styles.label}>Password</Text>

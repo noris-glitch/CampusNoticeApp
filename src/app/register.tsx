@@ -22,6 +22,14 @@ import { fetchPublicSettings } from '@/config/api-public';
 import { landingBackgroundUrl, warmUpServer } from '@/config/api-core';
 import type { DepartmentOption, FacultyOption, YearOption } from '@/config/api-types';
 import { loadLandingPageCache, saveLandingPageCache } from '@/config/session-storage';
+import {
+  isValidLocalPhoneNumber,
+  isValidStudentId,
+  sanitizePhoneInput,
+  sanitizeStudentIdInput,
+} from '@/utils/validation';
+
+const fallbackBackgroundImage = require('../../assets/images/logo-glow.png');
 
 const colors = {
   accent: '#0f7b6c',
@@ -73,6 +81,7 @@ export default function RegisterScreen() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [backgroundColor, setBackgroundColor] = useState('#17324D');
   const [backgroundImageUrl, setBackgroundImageUrl] = useState<string | null>(null);
+  const [backgroundImageFailed, setBackgroundImageFailed] = useState(false);
   const [landingSettingsReady, setLandingSettingsReady] = useState(false);
 
   const [name, setName] = useState('');
@@ -125,6 +134,7 @@ export default function RegisterScreen() {
       if (isMounted && cached) {
         setBackgroundColor(cached.background_color || '#17324D');
         setBackgroundImageUrl(landingBackgroundUrl(cached.background_image_url, cached.background_image));
+        setBackgroundImageFailed(false);
         setLandingSettingsReady(true);
       }
 
@@ -137,6 +147,7 @@ export default function RegisterScreen() {
 
         setBackgroundColor(nextColor);
         setBackgroundImageUrl(nextImage || null);
+        setBackgroundImageFailed(false);
         setLandingSettingsReady(true);
         void saveLandingPageCache({
           background_color: nextColor,
@@ -170,6 +181,7 @@ export default function RegisterScreen() {
       if (isMounted) {
         setBackgroundColor('#17324D');
         setBackgroundImageUrl(null);
+        setBackgroundImageFailed(false);
         setLandingSettingsReady(true);
       }
     }
@@ -212,6 +224,16 @@ export default function RegisterScreen() {
   const handleRegister = async () => {
     if (!name.trim() || !email.trim() || !studentId.trim() || !password || !confirmPassword) {
       Alert.alert('Register', 'Please fill in all required fields.');
+      return;
+    }
+
+    if (!isValidStudentId(studentId.trim())) {
+      Alert.alert('Register', 'Student ID must use the format XXXX/X/XXXX/XX.');
+      return;
+    }
+
+    if (phoneNumber.trim() !== '' && !isValidLocalPhoneNumber(phoneNumber.trim())) {
+      Alert.alert('Register', 'Phone number must be exactly 10 digits and start with 0.');
       return;
     }
 
@@ -259,7 +281,8 @@ export default function RegisterScreen() {
     }
   };
 
-  const backgroundImageSource = backgroundImageUrl ? { uri: backgroundImageUrl } : null;
+  const backgroundImageSource =
+    backgroundImageUrl && !backgroundImageFailed ? { uri: backgroundImageUrl } : fallbackBackgroundImage;
 
   return (
     <SafeAreaView edges={['top', 'right', 'left']} style={[styles.safeArea, { backgroundColor }]}>
@@ -272,6 +295,7 @@ export default function RegisterScreen() {
               source={backgroundImageSource}
               style={styles.heroImage}
               imageStyle={styles.heroImageLayer}
+              onError={() => setBackgroundImageFailed(true)}
             >
               <View style={styles.heroOverlay}>
                 <Text style={styles.heroBrand}>JOOUST CAMPUS NOTICE</Text>
@@ -334,35 +358,51 @@ export default function RegisterScreen() {
                     <TextInput
                       autoCapitalize="characters"
                       autoCorrect={false}
+                      maxLength={13}
+                      placeholder="I231/P/5872/22"
+                      placeholderTextColor={colors.muted}
                       style={[styles.input, isDark ? styles.inputDark : null]}
                       value={studentId}
-                      onChangeText={setStudentId}
+                      onChangeText={(value) => setStudentId(sanitizeStudentIdInput(value))}
                     />
+                    <Text style={[styles.helperText, isDark ? styles.helperTextDark : null]}>
+                      Use the format XXXX/X/XXXX/XX.
+                    </Text>
 
                     <Text style={[styles.label, isDark ? styles.labelDark : null]}>Phone number</Text>
                     <TextInput
-                      keyboardType="phone-pad"
-                      placeholder="+2547..."
+                      keyboardType="number-pad"
+                      maxLength={10}
+                      placeholder="0712345678"
                       placeholderTextColor={colors.muted}
                       style={[styles.input, isDark ? styles.inputDark : null]}
                       value={phoneNumber}
-                      onChangeText={setPhoneNumber}
+                      onChangeText={(value) => setPhoneNumber(sanitizePhoneInput(value))}
                     />
+                    <Text style={[styles.helperText, isDark ? styles.helperTextDark : null]}>
+                      Enter exactly 10 digits.
+                    </Text>
 
                     <Text style={[styles.label, isDark ? styles.labelDark : null]}>Faculty</Text>
-                    <View style={styles.wrapRow}>
-                      {faculties.map((faculty) => (
-                        <ChoiceChip
-                          key={faculty.id}
-                          active={selectedFaculty === faculty.id}
-                          label={faculty.name}
-                          onPress={() => {
-                            setSelectedFaculty(faculty.id);
-                            setCustomDepartment('');
-                          }}
-                        />
-                      ))}
-                    </View>
+                    {faculties.length > 0 ? (
+                      <View style={styles.wrapRow}>
+                        {faculties.map((faculty) => (
+                          <ChoiceChip
+                            key={faculty.id}
+                            active={selectedFaculty === faculty.id}
+                            label={faculty.name}
+                            onPress={() => {
+                              setSelectedFaculty(faculty.id);
+                              setCustomDepartment('');
+                            }}
+                          />
+                        ))}
+                      </View>
+                    ) : (
+                      <Text style={[styles.helperText, isDark ? styles.helperTextDark : null]}>
+                        No faculty options are available right now, so this field is left open.
+                      </Text>
+                    )}
 
                     <Text style={[styles.label, isDark ? styles.labelDark : null]}>Department</Text>
                     <View style={styles.wrapRow}>
@@ -397,16 +437,22 @@ export default function RegisterScreen() {
                     />
 
                     <Text style={[styles.label, isDark ? styles.labelDark : null]}>Year of study</Text>
-                    <View style={styles.wrapRow}>
-                      {years.map((year) => (
-                        <ChoiceChip
-                          key={year.value}
-                          active={selectedYear === year.value}
-                          label={year.label}
-                          onPress={() => setSelectedYear(year.value)}
-                        />
-                      ))}
-                    </View>
+                    {years.length > 0 ? (
+                      <View style={styles.wrapRow}>
+                        {years.map((year) => (
+                          <ChoiceChip
+                            key={year.value}
+                            active={selectedYear === year.value}
+                            label={year.label}
+                            onPress={() => setSelectedYear(year.value)}
+                          />
+                        ))}
+                      </View>
+                    ) : (
+                      <Text style={[styles.helperText, isDark ? styles.helperTextDark : null]}>
+                        Year options are not available right now.
+                      </Text>
+                    )}
 
                     <Text style={[styles.label, isDark ? styles.labelDark : null]}>
                       Membership or leadership role
@@ -643,6 +689,15 @@ const styles = StyleSheet.create({
     marginTop: -30,
     paddingHorizontal: 20,
     paddingTop: 24,
+  },
+  helperText: {
+    color: colors.muted,
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 10,
+  },
+  helperTextDark: {
+    color: '#b8c8d9',
   },
   passwordInput: {
     color: colors.ink,

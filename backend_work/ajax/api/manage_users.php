@@ -95,7 +95,7 @@ try {
         $adminType = trim((string) ($data['admin_type'] ?? ''));
         $facultyId = apiNullableInt($data['faculty_id'] ?? null);
         $phoneNumberRaw = trim((string) ($data['phone_number'] ?? ''));
-        $phoneNumber = normalizePhoneNumber($phoneNumberRaw !== '' ? $phoneNumberRaw : null);
+        $phoneNumber = normalizeLocalPhoneNumber($phoneNumberRaw !== '' ? $phoneNumberRaw : null);
         $year = apiNullableInt($data['year'] ?? null);
         $membership = apiNullableString($data['membership'] ?? null);
         $departmentInput = apiNullableString($data['department_name'] ?? ($data['department_id'] ?? null));
@@ -114,7 +114,11 @@ try {
         }
 
         if ($phoneNumberRaw !== '' && $phoneNumber === null) {
-            apiRespond(400, ['success' => false, 'error' => 'Choose a valid phone number']);
+            apiRespond(400, ['success' => false, 'error' => 'Choose a valid 10-digit phone number starting with 0']);
+        }
+
+        if (!isValidStudentIdFormat($studentId)) {
+            apiRespond(400, ['success' => false, 'error' => 'Student or staff ID must use the format XXXX/X/XXXX/XX']);
         }
 
         if (!in_array($role, apiManageUserRoles(), true)) {

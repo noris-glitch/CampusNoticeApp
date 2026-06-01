@@ -631,8 +631,8 @@ export function CreateNoticeSection({
   const [pinned, setPinned] = useState(false);
   const [requiresAck, setRequiresAck] = useState(false);
   const [inAppChannel, setInAppChannel] = useState(true);
-  const [emailChannel, setEmailChannel] = useState(false);
-  const [smsChannel, setSmsChannel] = useState(false);
+  const [emailChannel, setEmailChannel] = useState(true);
+  const [smsChannel, setSmsChannel] = useState(true);
   const [saveAsTemplate, setSaveAsTemplate] = useState(false);
   const [templateName, setTemplateName] = useState('');
   const [recurringTemplate, setRecurringTemplate] = useState(false);
@@ -794,8 +794,8 @@ export function CreateNoticeSection({
     setPinned(false);
     setRequiresAck(false);
     setInAppChannel(true);
-    setEmailChannel(false);
-    setSmsChannel(false);
+    setEmailChannel(true);
+    setSmsChannel(true);
     setSaveAsTemplate(false);
     setTemplateName('');
     setRecurringTemplate(false);
@@ -1010,6 +1010,16 @@ export function CreateNoticeSection({
         <ToggleRow label="In-app delivery" value={inAppChannel} onValueChange={setInAppChannel} />
         <ToggleRow label="Email delivery" value={emailChannel} onValueChange={setEmailChannel} />
         <ToggleRow label="SMS delivery" value={smsChannel} onValueChange={setSmsChannel} />
+        {session.role !== 'super_admin' ? (
+          <Text style={styles.helperText}>
+            Admin notices are submitted for review first, so email and SMS only go out after the notice is approved
+            and published.
+          </Text>
+        ) : null}
+        <Text style={styles.helperText}>
+          Email and SMS only reach users who have those notification preferences enabled, and SMS delivery also needs
+          a valid phone number plus the server SMS gateway configured.
+        </Text>
         {smsChannel && metadata?.sms_gateway_ready === false ? (
           <Text style={styles.helperText}>
             {metadata.sms_gateway_message || 'SMS delivery is not configured on the server yet.'}

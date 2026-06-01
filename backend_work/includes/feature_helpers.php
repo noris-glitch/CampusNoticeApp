@@ -495,6 +495,34 @@ if (!function_exists('normalizePhoneNumber')) {
     }
 }
 
+if (!function_exists('normalizeLocalPhoneNumber')) {
+    function normalizeLocalPhoneNumber(?string $rawValue): ?string
+    {
+        $value = trim((string) $rawValue);
+        if ($value === '') {
+            return null;
+        }
+
+        $digits = preg_replace('/\D/', '', $value);
+        if ($digits === null || $digits === '') {
+            return null;
+        }
+
+        if (preg_match('/^0\d{9}$/', $digits) !== 1) {
+            return null;
+        }
+
+        return $digits;
+    }
+}
+
+if (!function_exists('isValidStudentIdFormat')) {
+    function isValidStudentIdFormat(string $value): bool
+    {
+        return preg_match('/^[A-Za-z0-9]{4}\/[A-Za-z0-9]{1}\/[A-Za-z0-9]{4}\/[A-Za-z0-9]{2}$/', trim($value)) === 1;
+    }
+}
+
 if (!function_exists('buildNoticeAudienceConditions')) {
     function buildNoticeAudienceConditions(PDO $pdo, string $alias, array $user): array
     {

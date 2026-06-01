@@ -44,6 +44,10 @@ import type {
   StoredUser,
   StudentDashboardData,
 } from '@/config/api-types';
+import {
+  isValidLocalPhoneNumber,
+  sanitizePhoneInput,
+} from '@/utils/validation';
 
 const palette = {
   accent: '#0f7b6c',
@@ -1404,6 +1408,11 @@ export function ProfileSection({
   };
 
   const handleProfileSave = async () => {
+    if (phoneNumber.trim() !== '' && !isValidLocalPhoneNumber(phoneNumber.trim())) {
+      Alert.alert('Profile', 'Phone number must be exactly 10 digits and start with 0.');
+      return;
+    }
+
     setSaving(true);
     try {
       const response = await updateProfile(session, {
@@ -1525,12 +1534,13 @@ export function ProfileSection({
             />
             <Text style={styles.label}>Phone number</Text>
             <TextInput
-              keyboardType="phone-pad"
-              placeholder="+2547..."
+              keyboardType="number-pad"
+              maxLength={10}
+              placeholder="0712345678"
               placeholderTextColor={palette.muted}
               style={styles.input}
               value={phoneNumber}
-              onChangeText={setPhoneNumber}
+              onChangeText={(value) => setPhoneNumber(sanitizePhoneInput(value))}
             />
             <Text style={styles.label}>Faculty</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipStrip}>

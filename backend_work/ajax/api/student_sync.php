@@ -153,6 +153,12 @@ try {
             continue;
         }
 
+        if ($studentId !== '' && !isValidStudentIdFormat($studentId)) {
+            $results['skipped']++;
+            $results['issues'][] = 'Invalid student_id "' . $studentId . '". Expected XXXX/X/XXXX/XX.';
+            continue;
+        }
+
         $query = "SELECT * FROM users WHERE role = 'student' AND (student_id = ?";
         $params = [$studentId];
         if ($email !== '') {
@@ -206,7 +212,7 @@ try {
 
         $phoneNumber = null;
         if ($phoneRaw !== '') {
-            $phoneNumber = normalizePhoneNumber($phoneRaw);
+            $phoneNumber = normalizeLocalPhoneNumber($phoneRaw);
             if ($phoneNumber === null) {
                 $results['skipped']++;
                 $results['issues'][] = 'Invalid phone number "' . $phoneRaw . '" for ' . ($studentId ?: $email) . '.';

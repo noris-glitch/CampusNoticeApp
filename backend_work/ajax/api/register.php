@@ -53,7 +53,7 @@ try {
     $confirmPassword = (string) ($data['confirm_password'] ?? '');
     $year = apiNullableInt($data['year'] ?? null);
     $facultyId = apiNullableInt($data['faculty_id'] ?? null);
-    $phoneNumber = normalizePhoneNumber($data['phone_number'] ?? null);
+    $phoneNumber = normalizeLocalPhoneNumber($data['phone_number'] ?? null);
     $membership = apiNullableString($data['membership'] ?? null);
     $departmentInput = apiNullableString($data['department_name'] ?? ($data['department_id'] ?? null));
     $departmentId = null;
@@ -70,6 +70,8 @@ try {
     }
     if ($studentId === '') {
         $errors[] = 'Student ID is required';
+    } elseif (!isValidStudentIdFormat($studentId)) {
+        $errors[] = 'Student ID must use the format XXXX/X/XXXX/XX';
     }
     if ($password !== $confirmPassword) {
         $errors[] = 'Passwords do not match';
@@ -81,7 +83,7 @@ try {
         $errors[] = 'Please select a faculty';
     }
     if (($data['phone_number'] ?? '') !== '' && $phoneNumber === null) {
-        $errors[] = 'Please enter a valid phone number';
+        $errors[] = 'Please enter a valid 10-digit phone number starting with 0';
     }
 
     $errors = array_merge($errors, apiPasswordStrengthErrors($password));
