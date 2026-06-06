@@ -9,7 +9,7 @@ export function isValidLocalPhoneNumber(value: string): boolean {
 }
 
 export function sanitizeStudentIdInput(value: string): string {
-  return value.replace(/[^A-Za-z0-9/]/g, '').slice(0, 13);
+  return value.replace(/[^A-Za-z0-9/]/g, '').slice(0, 14);
 }
 
 export function isValidStudentId(value: string): boolean {

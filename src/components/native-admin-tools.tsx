@@ -699,7 +699,7 @@ export function ManageUsersSection({ isActive, onDirty, refreshToken, session }:
           editable={!draft.user_id}
           autoCapitalize="characters"
           autoCorrect={false}
-          maxLength={13}
+          maxLength={14}
           placeholder="I231/P/5872/22"
           placeholderTextColor={palette.muted}
           style={[styles.input, draft.user_id ? styles.inputMuted : null]}

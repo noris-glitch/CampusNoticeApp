@@ -358,7 +358,7 @@ export default function RegisterScreen() {
                     <TextInput
                       autoCapitalize="characters"
                       autoCorrect={false}
-                      maxLength={13}
+                      maxLength={14}
                       placeholder="I231/P/5872/22"
                       placeholderTextColor={colors.muted}
                       style={[styles.input, isDark ? styles.inputDark : null]}
